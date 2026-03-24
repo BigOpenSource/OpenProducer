@@ -87,7 +87,10 @@ function createDefaultProject(name) {
       aiModel: 'claude-opus-4-6',
       obsUrl: 'ws://localhost:4455',
       obsPassword: '',
-      workingDirectory: ''
+      workingDirectory: '',
+      replicateApiKey: '',
+      elevenLabsApiKey: '',
+      openaiApiKey: ''
     }
   };
 }
@@ -335,8 +338,9 @@ app.post('/api/:projectId/generate-script', async (req, res) => {
   const apiKey = settings.anthropicApiKey;
   if (!apiKey) return res.status(400).json({ error: 'Anthropic API key not set. Go to Settings.' });
 
-  const { steps, globalNotes, globalMedia, formatName, aiActionsEnabled, aiAvailableActions } = req.body;
+  const { steps, globalNotes, globalMedia, formatName, aiActionsEnabled, aiAvailableActions, aiMediaEnabled, aiMediaServices } = req.body;
   const canAddActions = aiActionsEnabled && aiAvailableActions && aiAvailableActions.length > 0;
+  const canGenerateMedia = aiMediaEnabled && aiMediaServices && aiMediaServices.length > 0;
 
   // Build prompt
   let systemPrompt = `You are a broadcast script writer. You generate teleprompter scripts for live productions.
@@ -354,8 +358,32 @@ Action format: {"type": "<type>", "graphicId": "<id>", "path": "<path>", "value"
 Only include fields relevant to the action type. Only add actions when they genuinely enhance the broadcast.
 For steps where no actions are needed, use an empty array.
 For locked steps, return {"text": "<exact locked text>", "actions": []}.`;
+  } else if (canGenerateMedia) {
+    systemPrompt += `\nReturn a JSON array of objects: [{"text": "...", "media": [...]}, ...]`;
   } else {
     systemPrompt += `\nReturn ONLY a JSON array of strings, one per step. Example: ["Text for step 1", "Text for step 2"]`;
+  }
+
+  if (canGenerateMedia) {
+    const serviceDescs = aiMediaServices.map(s => {
+      if (s.id === 'replicate_image') return `- replicate_image: Generate images via Replicate Flux (fast, high quality). Use for backgrounds, overlays, illustrations.`;
+      if (s.id === 'openai_image') return `- openai_image: Generate images via DALL-E 3 (detailed, creative). Use for specific scenes, artistic visuals.`;
+      if (s.id === 'elevenlabs_audio') return `- elevenlabs_audio: Generate voice/audio via ElevenLabs. Use for intros, transitions, voiceovers.`;
+      if (s.id === 'openai_audio') return `- openai_audio: Generate speech via OpenAI TTS. Use for narration, announcements.`;
+      return '';
+    }).filter(Boolean).join('\n');
+
+    systemPrompt += `\n\nYou can request media generation for unlocked steps when it would enhance the broadcast.
+Available media services:
+${serviceDescs}
+
+Add a "media" array to any step object:
+- For images: {"type": "image", "service": "replicate_image"|"openai_image", "prompt": "detailed visual description for the image"}
+- For audio: {"type": "audio", "service": "elevenlabs_audio"|"openai_audio", "text": "text to speak or describe"}
+
+Each media item should also include "target" (a description like "background image" or "transition sound") so we know what it's for.
+Only generate media when it genuinely adds value. Don't generate media for every step.
+For locked steps, never add media.`;
   }
 
   let userPrompt = `Generate teleprompter script text for a broadcast segment called "${formatName || 'Untitled'}".
@@ -416,10 +444,137 @@ For locked steps, return {"text": "<exact locked text>", "actions": []}.`;
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return res.status(500).json({ error: 'Could not parse AI response', raw: text });
     const generated = JSON.parse(match[0]);
+
+    // Process any media generation requests
+    if (canGenerateMedia) {
+      for (let i = 0; i < generated.length; i++) {
+        const step = generated[i];
+        if (step && typeof step === 'object' && step.media && Array.isArray(step.media)) {
+          for (let j = 0; j < step.media.length; j++) {
+            const m = step.media[j];
+            try {
+              const svc = m.service.replace('_image', '').replace('_audio', '');
+              if (m.type === 'image') {
+                m.url = await generateImage(svc === 'replicate' ? 'replicate' : 'openai', m.prompt, settings);
+              } else if (m.type === 'audio') {
+                m.url = await generateAudio(svc === 'elevenlabs' ? 'elevenlabs' : 'openai', m.text, settings);
+              }
+              m.generated = true;
+            } catch (e) {
+              m.error = e.message;
+            }
+          }
+        }
+      }
+    }
+
     res.json({ steps: generated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── Media Generation ────────────────────────────────────────────────────────
+async function generateImage(service, prompt, settings) {
+  if (service === 'replicate' && settings.replicateApiKey) {
+    // Use Replicate Flux model
+    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.replicateApiKey}` },
+      body: JSON.stringify({
+        model: 'black-forest-labs/flux-schnell',
+        input: { prompt, aspect_ratio: '16:9' }
+      })
+    });
+    const prediction = await createRes.json();
+    if (prediction.error) throw new Error(prediction.error);
+    // Poll for completion
+    let result = prediction;
+    for (let i = 0; i < 60; i++) {
+      if (result.status === 'succeeded') break;
+      if (result.status === 'failed') throw new Error('Image generation failed');
+      await new Promise(r => setTimeout(r, 2000));
+      const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
+        headers: { 'Authorization': `Bearer ${settings.replicateApiKey}` }
+      });
+      result = await pollRes.json();
+    }
+    const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+    // Download and save locally
+    return await downloadToUploads(imageUrl);
+  }
+  if (service === 'openai' && settings.openaiApiKey) {
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openaiApiKey}` },
+      body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1792x1024', response_format: 'url' })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return await downloadToUploads(data.data[0].url);
+  }
+  throw new Error(`No API key for ${service}`);
+}
+
+async function generateAudio(service, text, settings) {
+  if (service === 'elevenlabs' && settings.elevenLabsApiKey) {
+    const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'xi-api-key': settings.elevenLabsApiKey },
+      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' })
+    });
+    if (!res.ok) throw new Error('ElevenLabs error: ' + res.statusText);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const filename = uuidv4().slice(0, 12) + '.mp3';
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+    return `/uploads/${filename}`;
+  }
+  if (service === 'openai' && settings.openaiApiKey) {
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openaiApiKey}` },
+      body: JSON.stringify({ model: 'tts-1', voice: 'alloy', input: text })
+    });
+    if (!res.ok) throw new Error('OpenAI TTS error: ' + res.statusText);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const filename = uuidv4().slice(0, 12) + '.mp3';
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+    return `/uploads/${filename}`;
+  }
+  throw new Error(`No API key for ${service}`);
+}
+
+async function downloadToUploads(url) {
+  const res = await fetch(url);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get('content-type') || 'image/png';
+  const ext = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' }[contentType] || '.png';
+  const filename = uuidv4().slice(0, 12) + ext;
+  fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer);
+  return `/uploads/${filename}`;
+}
+
+// Process media generation requests from AI
+app.post('/api/:projectId/generate-media', async (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const settings = project.settings || {};
+  const { requests } = req.body; // [{type:'image'|'audio', service, prompt, text}]
+  const results = [];
+  for (const r of requests) {
+    try {
+      if (r.type === 'image') {
+        const url = await generateImage(r.service, r.prompt, settings);
+        results.push({ ...r, url, ok: true });
+      } else if (r.type === 'audio') {
+        const url = await generateAudio(r.service, r.text, settings);
+        results.push({ ...r, url, ok: true });
+      }
+    } catch (e) {
+      results.push({ ...r, error: e.message, ok: false });
+    }
+  }
+  res.json({ results });
 });
 
 // ─── Folder picker (macOS/Linux) ─────────────────────────────────────────────

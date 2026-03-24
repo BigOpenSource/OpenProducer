@@ -309,7 +309,7 @@
 </head>
 <body>
   <header class="app-header">
-    <h1><span class="logo">B</span> <span id="projectName">Project</span></h1>
+    <h1><span class="logo">B</span> <span id="projectName" style="cursor:pointer" onclick="renameProject()" title="Click to rename">Project</span></h1>
     <div class="nav-links">
       <span style="font-size:12px;color:var(--text-dim)" id="projectId"></span>
       <a href="#" onclick="openOutput()">Output</a>
@@ -454,6 +454,21 @@
             <button class="btn-ghost" onclick="connectOBSFromSettings()" style="margin-left:8px;font-size:12px;padding:4px 12px" id="obsConnectBtnSettings">Connect</button>
           </div>
         </div>
+        <div style="border-bottom:1px solid var(--border);padding-bottom:16px">
+          <h4 style="font-size:13px;margin-bottom:10px">Creative Services</h4>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Replicate API Key (image generation)</label>
+            <input type="password" id="setReplicateKey" placeholder="r8_..." onchange="updateSetting('replicateApiKey', this.value)">
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>ElevenLabs API Key (voice/audio)</label>
+            <input type="password" id="setElevenLabsKey" placeholder="xi-..." onchange="updateSetting('elevenLabsApiKey', this.value)">
+          </div>
+          <div class="form-group">
+            <label>OpenAI API Key (DALL-E images & TTS audio)</label>
+            <input type="password" id="setOpenAIKey" placeholder="sk-..." onchange="updateSetting('openaiApiKey', this.value)">
+          </div>
+        </div>
         <div>
           <h4 style="font-size:13px;margin-bottom:10px">Working Directory</h4>
           <div class="form-group">
@@ -498,6 +513,16 @@
         <div id="fmAiActionsPanel" style="display:none;margin-top:8px">
           <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);display:block;margin-bottom:6px">Available actions for AI</label>
           <div id="fmAiActionsList" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;flex-shrink:0;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface)">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="fmAiMedia" onchange="toggleAiMedia()">
+          <span>Allow AI to generate new graphics &amp; audio</span>
+        </label>
+        <div id="fmAiMediaPanel" style="display:none;margin-top:8px">
+          <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);display:block;margin-bottom:6px">Available services</label>
+          <div id="fmAiMediaList" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
       </div>
       <div id="fmSteps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px"></div>
@@ -777,6 +802,9 @@
       if (el('setModel')) el('setModel').value = s.aiModel || 'claude-opus-4-6';
       if (el('setObsUrl')) el('setObsUrl').value = s.obsUrl || 'ws://localhost:4455';
       if (el('setObsPass')) el('setObsPass').value = s.obsPassword || '';
+      if (el('setReplicateKey')) el('setReplicateKey').value = s.replicateApiKey || '';
+      if (el('setElevenLabsKey')) el('setElevenLabsKey').value = s.elevenLabsApiKey || '';
+      if (el('setOpenAIKey')) el('setOpenAIKey').value = s.openaiApiKey || '';
       if (el('setWorkDir')) el('setWorkDir').value = s.workingDirectory || '';
     }
     function updateSetting(k, v) {
@@ -1285,6 +1313,8 @@
     let modalGlobalMedia = [];
     let aiActionsEnabled = false;
     let aiAvailableActions = []; // [{id, label, type, graphicId, ...}]
+    let aiMediaEnabled = false;
+    let aiMediaServices = []; // [{id, label, enabled}]
 
     function openFormatModal(fi) {
       currentFormatIdx = fi;
@@ -1297,12 +1327,17 @@
       modalSteps.forEach(s => { s.notes = s.notes || ''; s.media = s.media || []; s.text = s.text || s.defaultText || ''; });
       aiActionsEnabled = false;
       aiAvailableActions = buildAvailableActions();
+      aiMediaEnabled = false;
+      aiMediaServices = buildMediaServices();
       renderModalSteps();
       renderGlobalMedia();
       renderAiActionsPanel();
+      renderAiMediaPanel();
       document.getElementById('fmGlobalNotes').value = '';
       document.getElementById('fmAiActions').checked = false;
       document.getElementById('fmAiActionsPanel').style.display = 'none';
+      document.getElementById('fmAiMedia').checked = false;
+      document.getElementById('fmAiMediaPanel').style.display = 'none';
       document.getElementById('formatModal').classList.add('open');
     }
 
@@ -1436,10 +1471,40 @@
       `).join('');
     }
 
+    function buildMediaServices() {
+      const s = project.settings || {};
+      const services = [];
+      if (s.replicateApiKey) services.push({ id: 'replicate_image', label: 'Replicate Flux — Image Generation', enabled: true });
+      if (s.openaiApiKey) services.push({ id: 'openai_image', label: 'OpenAI DALL-E 3 — Image Generation', enabled: true });
+      if (s.elevenLabsApiKey) services.push({ id: 'elevenlabs_audio', label: 'ElevenLabs — Voice & Audio', enabled: true });
+      if (s.openaiApiKey) services.push({ id: 'openai_audio', label: 'OpenAI TTS — Speech', enabled: true });
+      return services;
+    }
+
+    function toggleAiMedia() {
+      aiMediaEnabled = document.getElementById('fmAiMedia').checked;
+      document.getElementById('fmAiMediaPanel').style.display = aiMediaEnabled ? '' : 'none';
+    }
+
+    function renderAiMediaPanel() {
+      const c = document.getElementById('fmAiMediaList');
+      if (!c) return;
+      if (aiMediaServices.length === 0) {
+        c.innerHTML = '<div style="font-size:11px;color:var(--text-dim);padding:4px">No API keys configured. Add them in Settings.</div>';
+        return;
+      }
+      c.innerHTML = aiMediaServices.map((s, i) => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:4px;background:var(--bg)">
+          <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="aiMediaServices[${i}].enabled=this.checked">
+          <span>${esc(s.label)}</span>
+        </label>
+      `).join('');
+    }
+
     async function aiGenerate() {
       const btn = document.getElementById('aiGenBtn');
       const origText = btn.textContent;
-      btn.textContent = '⏳ Generating...';
+      btn.textContent = aiMediaEnabled ? '⏳ Generating text & media...' : '⏳ Generating...';
       btn.disabled = true;
 
       // Sync textarea values
@@ -1465,6 +1530,8 @@
             globalMedia: modalGlobalMedia,
             aiActionsEnabled,
             aiAvailableActions: aiActionsEnabled ? aiAvailableActions.filter(a => a.enabled) : [],
+            aiMediaEnabled,
+            aiMediaServices: aiMediaEnabled ? aiMediaServices.filter(s => s.enabled) : [],
             steps: modalSteps.map(s => ({
               label: s.label,
               locked: s.locked,
@@ -1488,6 +1555,12 @@
                 modalSteps[i].text = step.text || modalSteps[i].text;
                 if (step.actions && Array.isArray(step.actions)) {
                   modalSteps[i].actions = [...modalSteps[i].actions, ...step.actions];
+                }
+                if (step.media && Array.isArray(step.media)) {
+                  if (!modalSteps[i].media) modalSteps[i].media = [];
+                  step.media.forEach(m => {
+                    if (m.url) modalSteps[i].media.push(m.url);
+                  });
                 }
               }
             }
@@ -1576,6 +1649,11 @@
       const btn = document.getElementById('themeToggle');
       if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀️';
     })();
+
+    function renameProject() {
+      const name = prompt('Project name:', project.name);
+      if (name && name !== project.name) { project.name = name; save(); }
+    }
 
     function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
     function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
