@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Output</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #e63946;
+      --secondary: #1d3557;
+      --text-color: #ffffff;
+      --font: Arial, sans-serif;
+    }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+      font-family: var(--font);
+      color: var(--text-color);
+      position: relative;
+    }
+
+    /* ─── Animations ─────────────────────────────────────────────────────── */
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutLeft {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(-100%); opacity: 0; }
+    }
+    @keyframes slideInUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes slideOutDown {
+      from { transform: translateY(0); opacity: 1; }
+      to { transform: translateY(40px); opacity: 0; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    @keyframes expandWidth {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    @keyframes ticker-scroll {
+      from { transform: translateX(100%); }
+      to { transform: translateX(-100%); }
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      80% { transform: scale(1.05); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes popOut {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(0.6); opacity: 0; }
+    }
+
+    .graphic-show { animation-fill-mode: forwards; }
+    .graphic-hide { animation-fill-mode: forwards; }
+
+    /* ─── Lower Third ────────────────────────────────────────────────────── */
+    .lower_third {
+      position: absolute;
+      bottom: 80px;
+      left: 60px;
+      display: flex;
+      flex-direction: column;
+      max-width: 700px;
+    }
+    .lower_third .lt-bar {
+      height: 4px;
+      background: var(--primary);
+      border-radius: 2px 2px 0 0;
+      animation: expandWidth 0.4s ease forwards;
+    }
+    .lower_third .lt-body {
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
+      backdrop-filter: blur(12px);
+      padding: 16px 28px;
+      border-radius: 0 0 6px 6px;
+      border-left: 4px solid var(--primary);
+    }
+    .lower_third .lt-title {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .lower_third .lt-subtitle {
+      font-size: 20px;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-top: 4px;
+    }
+    .lower_third.graphic-show { animation: slideInLeft 0.5s ease forwards; }
+    .lower_third.graphic-hide { animation: slideOutLeft 0.4s ease forwards; }
+
+    /* ─── Message ────────────────────────────────────────────────────────── */
+    .message {
+      position: absolute;
+      top: 50px;
+      left: 0; right: 0;
+      margin-left: auto; margin-right: auto;
+      width: fit-content;
+      max-width: 900px;
+      text-align: center;
+    }
+    .message .msg-badge {
+      display: inline-block;
+      background: var(--primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      padding: 6px 20px;
+      border-radius: 4px 4px 0 0;
+    }
+    .message .msg-body {
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
+      backdrop-filter: blur(12px);
+      padding: 20px 40px;
+      border-radius: 0 6px 6px 6px;
+      border-top: 3px solid var(--primary);
+    }
+    .message .msg-text {
+      font-size: 36px;
+      font-weight: 700;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .message .msg-detail {
+      font-size: 20px;
+      opacity: 0.85;
+      margin-top: 8px;
+    }
+    .message.graphic-show { animation: slideInUp 0.5s ease forwards; }
+    .message.graphic-hide { animation: slideOutDown 0.4s ease forwards; }
+
+    /* ─── Ticker ─────────────────────────────────────────────────────────── */
+    .ticker {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: linear-gradient(90deg, var(--secondary), rgba(29,53,87,0.95));
+      border-top: 3px solid var(--primary);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+    .ticker .ticker-label {
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 0 20px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      z-index: 2;
+      position: relative;
+    }
+    .ticker .ticker-track {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+    .ticker .ticker-content {
+      display: flex;
+      gap: 60px;
+      white-space: nowrap;
+      font-size: 20px;
+      font-weight: 500;
+      padding-left: 20px;
+    }
+    .ticker .ticker-content span {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .ticker .ticker-content span::before {
+      content: '●';
+      color: var(--primary);
+      font-size: 8px;
+    }
+    .ticker.graphic-show { animation: slideInUp 0.4s ease forwards; }
+    .ticker.graphic-hide { animation: slideOutDown 0.3s ease forwards; }
+
+    /* ─── Image ──────────────────────────────────────────────────────────── */
+    .image-graphic {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: fit-content;
+      height: fit-content;
+    }
+    .image-graphic img {
+      max-width: 800px;
+      max-height: 600px;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .image-graphic.graphic-show { animation: fadeIn 0.5s ease forwards; }
+    .image-graphic.graphic-hide { animation: fadeOut 0.4s ease forwards; }
+
+    /* ─── Timer ──────────────────────────────────────────────────────────── */
+    .timer-graphic {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: fit-content;
+      height: fit-content;
+      text-align: center;
+    }
+    .timer-graphic .timer-label {
+      font-size: 24px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+    .timer-graphic .timer-display {
+      font-size: 120px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      background: linear-gradient(135deg, var(--primary), #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+    }
+    .timer-graphic .timer-bg {
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.9));
+      backdrop-filter: blur(12px);
+      padding: 30px 60px;
+      border-radius: 16px;
+      border: 2px solid rgba(255,255,255,0.1);
+    }
+    .timer-graphic.graphic-show { animation: popIn 0.5s ease forwards; }
+    .timer-graphic.graphic-hide { animation: popOut 0.3s ease forwards; }
+
+    /* ─── Score ──────────────────────────────────────────────────────────── */
+    .score-graphic {
+      position: absolute;
+      top: 30px;
+      left: 0; right: 0;
+      margin-left: auto; margin-right: auto;
+      width: fit-content;
+      display: flex;
+      align-items: stretch;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .score-team {
+      padding: 14px 30px;
+      text-align: center;
+      min-width: 200px;
+    }
+    .score-team .team-name {
+      font-size: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.9;
+    }
+    .score-team .team-score {
+      font-size: 56px;
+      font-weight: 800;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+    .score-vs {
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .score-graphic.graphic-show { animation: popIn 0.5s ease forwards; }
+    .score-graphic.graphic-hide { animation: popOut 0.3s ease forwards; }
+
+    /* ─── Custom CSS injection ───────────────────────────────────────────── */
+    #customCSS { }
+  </style>
+</head>
+<body>
+  <div id="graphicsContainer"></div>
+  <style id="customCSS"></style>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const PROJECT_ID = window.location.pathname.split('/')[2];
+    const IS_PREVIEW = window.location.pathname.startsWith('/preview/');
+    const socket = io();
+    let project = null;
+    const liveGraphics = new Map(); // id -> DOM element
+    const timerStates = new Map(); // id -> { interval, remaining, running }
+
+    // Parse ?bg= param
+    const params = new URLSearchParams(window.location.search);
+    const bg = params.get('bg');
+    if (bg) document.body.style.background = bg;
+
+    socket.emit('join', PROJECT_ID);
+
+    socket.on('project:update', (p) => {
+      const oldProject = project;
+      project = p;
+      applyTheme(p.theme);
+
+      // Output shows what's live now.
+      // Preview shows the projected result after pressing Run:
+      //   live + not cued → still on-air
+      //   live + cued     → will go off-air
+      //   !live + cued    → will go on-air
+      //   !live + !cued   → stays off
+      const shouldShow = IS_PREVIEW
+        ? (g) => g.isCued ? !g.isLive : g.isLive
+        : (g) => g.isLive;
+
+      p.graphics.forEach(g => {
+        if (shouldShow(g) && !liveGraphics.has(g.id)) {
+          showGraphic(g);
+        } else if (!shouldShow(g) && liveGraphics.has(g.id)) {
+          hideGraphic(g);
+        } else if (shouldShow(g) && liveGraphics.has(g.id)) {
+          // Update content in-place
+          updateGraphicContent(g);
+        }
+      });
+      // Hide graphics that were removed
+      for (const [id] of liveGraphics) {
+        if (!p.graphics.find(g => g.id === id)) {
+          hideGraphicById(id);
+        }
+      }
+    });
+
+    // Preview relies solely on project:update for cued state;
+    // Output also responds to direct show/hide events for lower latency
+    if (!IS_PREVIEW) {
+      socket.on('graphic:show', (g) => {
+        if (!liveGraphics.has(g.id)) showGraphic(g);
+      });
+
+      socket.on('graphic:hide', (g) => {
+        hideGraphic(g);
+      });
+    }
+
+    socket.on('graphic:update', (g) => {
+      if (liveGraphics.has(g.id)) updateGraphicContent(g);
+    });
+
+    socket.on('timer:action', ({ id, action, seconds }) => {
+      const ts = timerStates.get(id);
+      if (!ts) return;
+      switch (action) {
+        case 'run': startTimer(id); break;
+        case 'pause': pauseTimer(id); break;
+        case 'reset': resetTimer(id); break;
+        case 'jump':
+          ts.remaining += seconds;
+          if (ts.remaining < 0) ts.remaining = 0;
+          renderTimer(id);
+          break;
+        case 'duration':
+          ts.duration = seconds;
+          ts.remaining = seconds;
+          renderTimer(id);
+          break;
+      }
+    });
+
+    // ─── Theme ─────────────────────────────────────────────────────────────
+    function applyTheme(theme) {
+      if (!theme) return;
+      document.documentElement.style.setProperty('--primary', theme.primaryColor);
+      document.documentElement.style.setProperty('--secondary', theme.secondaryColor);
+      document.documentElement.style.setProperty('--text-color', theme.textColor);
+      document.documentElement.style.setProperty('--font', theme.fontFamily);
+      document.body.style.fontFamily = theme.fontFamily;
+      document.getElementById('customCSS').textContent = theme.customCSS || '';
+    }
+
+    // ─── Variable replacement ──────────────────────────────────────────────
+    function replaceVars(text) {
+      if (!project || !text) return text || '';
+      // [text.1], [text.2], [text.3]
+      text = text.replace(/\[text\.(\d+)\]/g, (_, n) => {
+        const v = project.variables.text.find(t => t.id === `text.${n}`);
+        return v ? v.value : '';
+      });
+      // [list1.1], [list1.2] - selected row
+      text = text.replace(/\[list(\d+)\.(\d+)\]/g, (_, listNum, colNum) => {
+        const list = project.variables.lists[parseInt(listNum) - 1];
+        if (!list || list.selectedRow < 0 || !list.rows[list.selectedRow]) return '';
+        return list.rows[list.selectedRow][parseInt(colNum) - 1] || '';
+      });
+      // [list1.row1.cell1]
+      text = text.replace(/\[list(\d+)\.row(\d+)\.cell(\d+)\]/g, (_, ln, rn, cn) => {
+        const list = project.variables.lists[parseInt(ln) - 1];
+        if (!list) return '';
+        const row = list.rows[parseInt(rn) - 1];
+        return row ? (row[parseInt(cn) - 1] || '') : '';
+      });
+      return text;
+    }
+
+    // ─── Show graphic ──────────────────────────────────────────────────────
+    function showGraphic(g) {
+      const container = document.getElementById('graphicsContainer');
+      let el;
+
+      switch (g.type) {
+        case 'lower_third':
+          el = createElement('div', `lower_third graphic-show`, `
+            <div class="lt-bar"></div>
+            <div class="lt-body">
+              <div class="lt-title">${esc(replaceVars(g.content.title))}</div>
+              <div class="lt-subtitle">${esc(replaceVars(g.content.subtitle))}</div>
+            </div>
+          `);
+          break;
+
+        case 'message':
+          el = createElement('div', `message graphic-show`, `
+            <div class="msg-badge">ALERT</div>
+            <div class="msg-body">
+              <div class="msg-text">${esc(replaceVars(g.content.text))}</div>
+              <div class="msg-detail">${esc(replaceVars(g.content.detail))}</div>
+            </div>
+          `);
+          break;
+
+        case 'ticker':
+          const items = g.content.items.map(i => `<span>${esc(replaceVars(i))}</span>`).join('');
+          const dur = Math.max(10, g.content.items.length * (60 / (g.content.speed || 60)) * 5);
+          el = createElement('div', `ticker graphic-show`, `
+            <div class="ticker-label">LATEST</div>
+            <div class="ticker-track">
+              <div class="ticker-content" style="animation: ticker-scroll ${dur}s linear infinite">
+                ${items}${items}
+              </div>
+            </div>
+          `);
+          break;
+
+        case 'image':
+          el = createElement('div', `image-graphic graphic-show`, `
+            <img src="${esc(replaceVars(g.content.url))}" style="object-fit:${g.content.sizing}" onerror="this.style.display='none'">
+          `);
+          break;
+
+        case 'timer':
+          el = createElement('div', `timer-graphic graphic-show`, `
+            <div class="timer-bg">
+              <div class="timer-label">${esc(replaceVars(g.content.label))}</div>
+              <div class="timer-display" id="timer-${g.id}">00:00</div>
+            </div>
+          `);
+          initTimer(g);
+          break;
+
+        case 'score':
+          el = createElement('div', `score-graphic graphic-show`, `
+            <div class="score-team" style="background:${g.content.team1.color}">
+              <div class="team-name">${esc(replaceVars(g.content.team1.name))}</div>
+              <div class="team-score" id="score-t1-${g.id}">${g.content.team1.score}</div>
+            </div>
+            <div class="score-vs">VS</div>
+            <div class="score-team" style="background:${g.content.team2.color}">
+              <div class="team-name">${esc(replaceVars(g.content.team2.name))}</div>
+              <div class="team-score" id="score-t2-${g.id}">${g.content.team2.score}</div>
+            </div>
+          `);
+          break;
+
+        default:
+          return;
+      }
+
+      el.dataset.graphicId = g.id;
+      container.appendChild(el);
+      liveGraphics.set(g.id, el);
+    }
+
+    // ─── Hide graphic ──────────────────────────────────────────────────────
+    function hideGraphic(g) {
+      hideGraphicById(g.id);
+    }
+
+    function hideGraphicById(id) {
+      const el = liveGraphics.get(id);
+      if (!el) return;
+
+      // Immediately remove from tracking to prevent race conditions
+      // between graphic:hide and project:update both calling this
+      liveGraphics.delete(id);
+
+      // Stop timer if any
+      const ts = timerStates.get(id);
+      if (ts && ts.interval) clearInterval(ts.interval);
+      timerStates.delete(id);
+
+      el.classList.remove('graphic-show');
+      el.classList.add('graphic-hide');
+
+      let removed = false;
+      const cleanup = () => {
+        if (removed) return;
+        removed = true;
+        el.remove();
+      };
+
+      // Only react to animations on this element, not children bubbling up
+      el.addEventListener('animationend', (e) => {
+        if (e.target === el) cleanup();
+      });
+
+      // Guaranteed fallback
+      setTimeout(cleanup, 1000);
+    }
+
+    // ─── Update graphic content in-place ───────────────────────────────────
+    function updateGraphicContent(g) {
+      const el = liveGraphics.get(g.id);
+      if (!el) return;
+
+      switch (g.type) {
+        case 'lower_third':
+          el.querySelector('.lt-title').textContent = replaceVars(g.content.title);
+          el.querySelector('.lt-subtitle').textContent = replaceVars(g.content.subtitle);
+          break;
+        case 'message':
+          el.querySelector('.msg-text').textContent = replaceVars(g.content.text);
+          el.querySelector('.msg-detail').textContent = replaceVars(g.content.detail);
+          break;
+        case 'score': {
+          const t1 = el.querySelector(`#score-t1-${g.id}`);
+          const t2 = el.querySelector(`#score-t2-${g.id}`);
+          if (t1) t1.textContent = g.content.team1.score;
+          if (t2) t2.textContent = g.content.team2.score;
+          const teams = el.querySelectorAll('.score-team');
+          if (teams[0]) {
+            teams[0].style.background = g.content.team1.color;
+            teams[0].querySelector('.team-name').textContent = replaceVars(g.content.team1.name);
+          }
+          if (teams[1]) {
+            teams[1].style.background = g.content.team2.color;
+            teams[1].querySelector('.team-name').textContent = replaceVars(g.content.team2.name);
+          }
+          break;
+        }
+        case 'ticker': {
+          const items = g.content.items.map(i => `<span>${esc(replaceVars(i))}</span>`).join('');
+          const dur = Math.max(10, g.content.items.length * (60 / (g.content.speed || 60)) * 5);
+          const content = el.querySelector('.ticker-content');
+          if (content) {
+            content.innerHTML = items + items;
+            content.style.animation = `ticker-scroll ${dur}s linear infinite`;
+          }
+          break;
+        }
+        case 'image': {
+          const img = el.querySelector('img');
+          if (img) {
+            img.src = replaceVars(g.content.url);
+            img.style.objectFit = g.content.sizing;
+          }
+          break;
+        }
+      }
+    }
+
+    // ─── Timer logic ───────────────────────────────────────────────────────
+    function initTimer(g) {
+      const state = {
+        mode: g.content.mode,
+        duration: g.content.duration || 300,
+        remaining: g.content.mode === 'countup' ? 0 : (g.content.duration || 300),
+        running: false,
+        interval: null,
+        format: g.content.format || 'mm:ss'
+      };
+      timerStates.set(g.id, state);
+
+      if (g.content.mode === 'clock') {
+        state.interval = setInterval(() => renderTimer(g.id), 1000);
+        renderTimer(g.id);
+      } else {
+        renderTimer(g.id);
+        startTimer(g.id);
+      }
+    }
+
+    function startTimer(id) {
+      const ts = timerStates.get(id);
+      if (!ts || ts.running || ts.mode === 'clock') return;
+      ts.running = true;
+      ts.interval = setInterval(() => {
+        if (ts.mode === 'countdown') {
+          ts.remaining--;
+          if (ts.remaining <= 0) { ts.remaining = 0; pauseTimer(id); }
+        } else {
+          ts.remaining++;
+          if (ts.remaining >= ts.duration) { ts.remaining = ts.duration; pauseTimer(id); }
+        }
+        renderTimer(id);
+      }, 1000);
+    }
+
+    function pauseTimer(id) {
+      const ts = timerStates.get(id);
+      if (!ts) return;
+      ts.running = false;
+      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; }
+    }
+
+    function resetTimer(id) {
+      const ts = timerStates.get(id);
+      if (!ts) return;
+      pauseTimer(id);
+      ts.remaining = ts.mode === 'countup' ? 0 : ts.duration;
+      renderTimer(id);
+    }
+
+    function renderTimer(id) {
+      const ts = timerStates.get(id);
+      if (!ts) return;
+      const el = document.getElementById(`timer-${id}`);
+      if (!el) return;
+
+      if (ts.mode === 'clock') {
+        const now = new Date();
+        el.textContent = formatTime(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds(), ts.format);
+        return;
+      }
+      el.textContent = formatTime(ts.remaining, ts.format);
+    }
+
+    function formatTime(totalSec, fmt) {
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+
+      let result = fmt;
+      result = result.replace('HH', String(h).padStart(2, '0'));
+      result = result.replace('H', String(h));
+      result = result.replace('mm', String(m).padStart(2, '0'));
+      result = result.replace('m', String(m));
+      result = result.replace('ss', String(s).padStart(2, '0'));
+      result = result.replace('s', String(s));
+      return result;
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────
+    function createElement(tag, className, innerHTML) {
+      const el = document.createElement(tag);
+      el.className = className;
+      el.innerHTML = innerHTML;
+      return el;
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0a0f;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #ccc;
+    }
+
+    .multiview {
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .monitor {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+      height: 100%;
+    }
+
+    .monitor-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      padding: 6px 0;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .monitor-label.cued { color: #f1c40f; }
+    .monitor-label.live { color: #e63946; }
+
+    .monitor-frame {
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      position: relative;
+      border: 2px solid #222;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #111;
+    }
+    .monitor.is-cued .monitor-frame { border-color: #4a4000; }
+    .monitor.is-live .monitor-frame { border-color: #5a1018; }
+
+    .monitor-frame iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1920px;
+      height: 1080px;
+      border: none;
+      transform-origin: 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="multiview" id="multiview">
+    <div class="monitor is-cued" id="monCued">
+      <div class="monitor-label cued">Preview (Cued)</div>
+      <div class="monitor-frame" id="frameCued">
+        <iframe id="iframeCued"></iframe>
+      </div>
+    </div>
+    <div class="monitor is-live" id="monLive">
+      <div class="monitor-label live">Program (Live)</div>
+      <div class="monitor-frame" id="frameLive">
+        <iframe id="iframeLive"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PROJECT_ID = window.location.pathname.split('/')[2];
+    const iframeCued = document.getElementById('iframeCued');
+    const iframeLive = document.getElementById('iframeLive');
+    const frameCued = document.getElementById('frameCued');
+    const frameLive = document.getElementById('frameLive');
+
+    iframeCued.src = `/preview/${PROJECT_ID}?bg=%23111`;
+    iframeLive.src = `/output/${PROJECT_ID}?bg=%23111`;
+
+    function resize() {
+      [frameCued, frameLive].forEach(frame => {
+        const iframe = frame.querySelector('iframe');
+        const w = frame.clientWidth;
+        const h = frame.clientHeight;
+        const scale = Math.min(w / 1920, h / 1080);
+        iframe.style.transform = `scale(${scale})`;
+      });
+    }
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(frameCued);
+    ro.observe(frameLive);
+    window.addEventListener('load', resize);
+  </script>
+</body>
+</html>

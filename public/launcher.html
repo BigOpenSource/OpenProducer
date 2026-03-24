@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Broadcast - Launcher</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    .launcher-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: calc(100vh - 60px); padding: 40px 24px;
+    }
+    .launcher-title { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    .launcher-sub { color: var(--text-dim); margin-bottom: 32px; }
+    .project-list { width: 100%; max-width: 540px; display: flex; flex-direction: column; gap: 8px; }
+    .project-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; transition: border-color var(--transition), background var(--transition);
+    }
+    .project-item:hover { border-color: var(--accent); background: var(--surface2); }
+    .project-info h3 { font-size: 16px; font-weight: 600; }
+    .project-info span { font-size: 12px; color: var(--text-dim); }
+    .project-actions { display: flex; gap: 6px; }
+    .project-actions button { padding: 6px 10px; font-size: 12px; }
+    .create-row { display: flex; gap: 8px; width: 100%; max-width: 540px; margin-bottom: 16px; }
+    .create-row input { flex: 1; }
+    .empty-state { color: var(--text-dim); text-align: center; padding: 40px; }
+    .project-id { font-family: monospace; font-size: 11px; color: var(--text-dim); background: var(--surface2); padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1><span class="logo">B</span> My Broadcast</h1>
+  </header>
+
+  <div class="launcher-wrap">
+    <h2 class="launcher-title">Projects</h2>
+    <p class="launcher-sub">Create or open a project to get started</p>
+
+    <div class="create-row">
+      <input type="text" id="projectName" placeholder="New project name..." value="My Project">
+      <button class="btn-primary" onclick="createProject()">+ Create</button>
+    </div>
+
+    <div class="project-list" id="projectList">
+      <div class="empty-state">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    async function loadProjects() {
+      const res = await fetch('/api/projects');
+      const projects = await res.json();
+      const list = document.getElementById('projectList');
+      if (projects.length === 0) {
+        list.innerHTML = '<div class="empty-state">No projects yet. Create one above!</div>';
+        return;
+      }
+      list.innerHTML = projects.map(p => `
+        <div class="project-item" onclick="openProject('${p.id}')">
+          <div class="project-info">
+            <h3>${esc(p.name)}</h3>
+            <span><span class="project-id">${p.id}</span> &middot; ${new Date(p.createdAt).toLocaleDateString()}</span>
+          </div>
+          <div class="project-actions" onclick="event.stopPropagation()">
+            <button class="btn-ghost" onclick="duplicateProject('${p.id}')">Duplicate</button>
+            <button class="btn-danger" onclick="deleteProject('${p.id}', '${esc(p.name)}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openProject(id) {
+      window.location.href = '/rundown/' + id;
+    }
+
+    async function createProject() {
+      const name = document.getElementById('projectName').value.trim() || 'My Project';
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      loadProjects();
+    }
+
+    async function duplicateProject(id) {
+      await fetch(`/api/projects/${id}/duplicate`, { method: 'POST' });
+      loadProjects();
+    }
+
+    async function deleteProject(id, name) {
+      if (!confirm(`Delete project "${name}"?`)) return;
+      await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      loadProjects();
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    loadProjects();
+  </script>
+</body>
+</html>

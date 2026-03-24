@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Broadcast - Control</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .app-header .nav-links { display: flex; gap: 12px; align-items: center; }
+    .app-header .nav-links a { font-size: 13px; color: var(--text-dim); }
+    .app-header .nav-links a:hover { color: var(--text); }
+
+    .main { flex: 1; display: flex; overflow: hidden; }
+
+    /* ─── Sidebar ──────── */
+    .sidebar {
+      width: 160px; min-width: 160px; background: var(--surface);
+      border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    }
+    .sidebar-section { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .sidebar-section h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 6px; }
+    .graphic-type-btn {
+      display: flex; align-items: center; gap: 6px;
+      width: 100%; padding: 6px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-size: 12px; text-align: left; margin-bottom: 3px;
+    }
+    .graphic-type-btn:hover { border-color: var(--accent); }
+    .graphic-type-btn .icon { width: 20px; text-align: center; font-size: 14px; }
+
+    /* ─── Rundown ──────── */
+    .rundown-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .rundown-toolbar {
+      padding: 8px 16px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .rundown-toolbar .left { display: flex; align-items: center; gap: 8px; }
+    .rundown-grid {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      align-content: start;
+      background: var(--bg);
+    }
+
+    /* ─── Card ──────── */
+    .gcard {
+      background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; display: flex; flex-direction: column;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .gcard:hover { border-color: #555; box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
+
+    /* Colored card overrides — border + header accent only */
+    .gcard-colored { background: var(--cc-bg); border-color: var(--cc-border); box-shadow: none; }
+    .gcard-colored:hover { border-color: var(--cc); box-shadow: none; }
+    .gcard-colored .gcard-header { background: var(--cc-surface); border-bottom-color: var(--cc-border); }
+
+    .gcard-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      cursor: grab;
+    }
+
+    .gcard-icon {
+      font-size: 22px; line-height: 1; flex-shrink: 0;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06);
+      border-radius: 6px;
+    }
+
+    .gcard-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .gcard-title {
+      font-weight: 700; font-size: 13px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: text;
+    }
+    .gcard-title:hover { color: var(--accent); }
+    .gcard-title-input {
+      font-weight: 700; font-size: 13px; font-family: inherit;
+      background: var(--bg); border: 1.5px solid var(--accent);
+      border-radius: 4px; padding: 1px 6px; color: var(--text);
+      outline: none; width: 100%;
+    }
+    .gcard-subtitle {
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .gcard-status {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .gcard-status.off { background: #555; }
+    .gcard-status.cued { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .gcard-status.live { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse 1.5s infinite; }
+    .gcard-status.cued-off { background: var(--red); box-shadow: 0 0 0 2px var(--yellow); }
+
+    .gcard-type {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--accent); background: rgba(108,92,231,0.15);
+      padding: 2px 6px; border-radius: 3px; flex-shrink: 0; font-weight: 600;
+    }
+
+    .gcard-color-btn {
+      width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border);
+      cursor: pointer; padding: 0; flex-shrink: 0; position: relative; overflow: hidden;
+    }
+    .gcard-color-btn input[type="color"] {
+      position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px);
+      border: none; padding: 0; cursor: pointer; opacity: 0;
+    }
+    .gcard-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .gcard-btns button {
+      padding: 6px 12px; font-size: 13px; font-weight: 600;
+      background: var(--surface); min-height: 32px;
+      border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px;
+      cursor: pointer;
+    }
+    .gcard-btns button:hover { color: var(--text); border-color: #555; background: var(--surface2); }
+    .gcard-btns .btn-live { background: var(--red); color: #fff; border-color: var(--red); }
+    .gcard-btns .btn-live:hover { background: var(--red-hover); }
+    .gcard-btns .btn-cue { font-size: 16px; padding: 6px 10px; }
+    .gcard-btns .btn-del { color: #666; padding: 6px 8px; }
+    .gcard-btns .btn-del:hover { color: var(--red); }
+
+    /* ─── Card body (always-open editor) ──────── */
+    .gcard-body {
+      padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      font-size: 13px;
+    }
+    .gcard-body .fg { display: flex; flex-direction: column; gap: 3px; }
+    .gcard-body .fg label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+      color: var(--text-dim); font-weight: 500;
+    }
+    .gcard-body input, .gcard-body select, .gcard-body textarea {
+      font-size: 13px; padding: 7px 10px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .gcard-body input:hover, .gcard-body select:hover, .gcard-body textarea:hover {
+      border-color: #555;
+    }
+    .gcard-body input:focus, .gcard-body select:focus, .gcard-body textarea:focus {
+      border-color: var(--accent);
+      background: var(--surface2);
+    }
+    .gcard-body textarea { resize: vertical; }
+    .gcard-body .row { display: flex; gap: 8px; }
+    .gcard-body .row > .fg { flex: 1; min-width: 0; }
+
+    /* Score compact */
+    .score-line {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .score-line input[type="color"] {
+      width: 30px; height: 30px; padding: 1px; border: 1px solid var(--border);
+      border-radius: 6px; background: var(--surface); cursor: pointer; flex-shrink: 0;
+    }
+    .score-line input[type="text"] { flex: 1; min-width: 0; background: var(--bg); border: 1.5px solid var(--border); border-radius: 6px; }
+    .score-line input[type="number"] { width: 56px; text-align: center; background: var(--bg); border: 1.5px solid var(--border); border-radius: 6px; }
+    .score-line input:hover { border-color: #555; }
+    .score-line input:focus { border-color: var(--accent); background: var(--surface2); }
+    .score-line button { padding: 4px 10px; font-size: 16px; font-weight: 700; min-height: 30px; }
+    .score-label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.4px; margin-bottom: 2px; font-weight: 500; }
+
+    .rundown-empty {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 14px; padding: 60px;
+    }
+
+    /* ─── Variable / Theme tabs ──────── */
+    .tab-content { display: none; padding: 16px 20px; overflow-y: auto; flex: 1; }
+    .tab-content.active { display: block; }
+
+    .var-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .var-table th, .var-table td {
+      padding: 6px 10px; border: 1px solid var(--border); text-align: left;
+    }
+    .var-table th { background: var(--surface2); font-size: 11px; text-transform: uppercase; color: var(--text-dim); }
+    .var-table input { width: 100%; border: none; background: transparent; color: var(--text); padding: 2px; }
+    .var-row-selected { background: var(--accent) !important; }
+    .var-row-selected td { color: #fff; }
+    .list-controls { display: flex; gap: 6px; margin-top: 8px; }
+
+    /* ─── Lock ──────── */
+    .lock-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+      z-index: 500; cursor: not-allowed;
+    }
+    .lock-overlay.active { display: block; }
+    .lock-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--yellow); color: #000; text-align: center;
+      padding: 8px; font-weight: 600; font-size: 13px; z-index: 501;
+      cursor: pointer;
+    }
+
+    /* ─── Drag & drop ──────── */
+    .gcard.dragging { opacity: 0.3; }
+    .gcard.drag-over { outline: 2px solid var(--accent); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1><span class="logo">B</span> <span id="projectName">Project</span></h1>
+    <div class="nav-links">
+      <span style="font-size:12px;color:var(--text-dim)" id="projectId"></span>
+      <a href="#" onclick="openOutput()">Output</a>
+      <a href="#" onclick="openPreview()">Preview</a>
+      <a href="/">Launcher</a>
+    </div>
+  </header>
+
+  <div class="tabs" id="mainTabs">
+    <button class="tab active" data-tab="rundown">Rundown</button>
+    <button class="tab" data-tab="variables">Variables</button>
+    <button class="tab" data-tab="theme">Theme</button>
+  </div>
+
+  <div class="main">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-section">
+        <h3>Add Graphic</h3>
+        <button class="graphic-type-btn" onclick="addGraphic('lower_third')"><span class="icon">▬</span> Lower Third</button>
+        <button class="graphic-type-btn" onclick="addGraphic('message')"><span class="icon">💬</span> Message</button>
+        <button class="graphic-type-btn" onclick="addGraphic('ticker')"><span class="icon">↔</span> Ticker</button>
+        <button class="graphic-type-btn" onclick="addGraphic('image')"><span class="icon">🖼</span> Image</button>
+        <button class="graphic-type-btn" onclick="addGraphic('timer')"><span class="icon">⏱</span> Timer</button>
+        <button class="graphic-type-btn" onclick="addGraphic('score')"><span class="icon">⚽</span> Scoreboard</button>
+      </div>
+    </div>
+
+    <!-- Tab: Rundown -->
+    <div class="rundown-area tab-content active" id="tab-rundown">
+      <div class="rundown-toolbar">
+        <div class="left">
+          <button class="btn-primary" onclick="runCued()" title="Run all cued graphics">▶ Run</button>
+          <button class="btn-danger" onclick="clearAll()" title="Clear all live graphics">■ Clear</button>
+        </div>
+        <div>
+          <button class="btn-ghost" id="lockBtn" onclick="toggleLock()">🔓 Lock</button>
+        </div>
+      </div>
+      <div class="rundown-grid" id="rundownGrid"></div>
+    </div>
+
+    <!-- Tab: Variables -->
+    <div class="tab-content" id="tab-variables">
+      <h3 style="margin-bottom:16px">Text Variables</h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Use <code>[text.1]</code>, <code>[text.2]</code>, <code>[text.3]</code> in any graphic field.</p>
+      <div id="textVarsContainer" class="flex flex-col gap-sm"></div>
+      <h3 style="margin:24px 0 16px">List Variable</h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Use <code>[list1.1]</code>, <code>[list1.2]</code>, etc. Selected row data is used.</p>
+      <div id="listVarContainer"></div>
+    </div>
+
+    <!-- Tab: Theme -->
+    <div class="tab-content" id="tab-theme">
+      <h3 style="margin-bottom:16px">Theme Settings</h3>
+      <div class="flex flex-col gap-md">
+        <div class="form-group">
+          <label>Primary Color</label>
+          <div class="color-input-wrap">
+            <input type="color" id="themePrimary" onchange="updateThemeColor('primaryColor', this.value)">
+            <input type="text" id="themePrimaryText" onchange="updateThemeColor('primaryColor', this.value)" placeholder="#e63946">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Secondary Color</label>
+          <div class="color-input-wrap">
+            <input type="color" id="themeSecondary" onchange="updateThemeColor('secondaryColor', this.value)">
+            <input type="text" id="themeSecondaryText" onchange="updateThemeColor('secondaryColor', this.value)" placeholder="#1d3557">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Text Color</label>
+          <div class="color-input-wrap">
+            <input type="color" id="themeText" onchange="updateThemeColor('textColor', this.value)">
+            <input type="text" id="themeTextText" onchange="updateThemeColor('textColor', this.value)" placeholder="#ffffff">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Font Family</label>
+          <input type="text" id="themeFont" value="Arial, sans-serif" onchange="updateTheme('fontFamily', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Custom CSS</label>
+          <textarea id="themeCSS" rows="8" placeholder=".lower_third { ... }" onchange="updateTheme('customCSS', this.value)"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lock-overlay" id="lockOverlay"></div>
+  <div class="lock-bar" id="lockBar" style="display:none" onclick="toggleLock()">🔒 Show Locked — Click to Unlock</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const PROJECT_ID = window.location.pathname.split('/')[2];
+    const socket = io();
+    let project = null;
+    let isLocked = false;
+
+    socket.emit('join', PROJECT_ID);
+    socket.on('project:update', (p) => {
+      const focused = document.activeElement;
+      const focusInfo = focused && focused.dataset.field ? {
+        graphicId: focused.dataset.gid,
+        field: focused.dataset.field,
+        selStart: focused.selectionStart,
+        selEnd: focused.selectionEnd
+      } : null;
+
+      project = p;
+      render();
+
+      if (focusInfo) {
+        const el = document.querySelector(`[data-gid="${focusInfo.graphicId}"][data-field="${focusInfo.field}"]`);
+        if (el) {
+          el.focus();
+          try { el.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch(e) {}
+        }
+      }
+    });
+
+    // ─── Tabs ──────────────────────────────────────────────────────────────
+    document.querySelectorAll('#mainTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        document.getElementById('sidebar').style.display = tab.dataset.tab === 'rundown' ? '' : 'none';
+      });
+    });
+
+    // ─── Render ────────────────────────────────────────────────────────────
+    function render() {
+      if (!project) return;
+      document.getElementById('projectName').textContent = project.name;
+      document.getElementById('projectId').textContent = project.id;
+      renderRundown();
+      renderVariables();
+      renderTheme();
+    }
+
+    function renderRundown() {
+      const grid = document.getElementById('rundownGrid');
+      if (project.graphics.length === 0) {
+        grid.innerHTML = '<div class="rundown-empty">No graphics yet. Add one from the sidebar.</div>';
+        return;
+      }
+      grid.innerHTML = project.graphics.map((g, i) => {
+        const sc = g.isLive && g.isCued ? 'cued-off' : g.isLive ? 'live' : g.isCued ? 'cued' : 'off';
+        const cc = g.cardColor || '';
+        const vars = cc ? `--cc:${cc}; --cc-bg:${cc}18; --cc-surface:${cc}30; --cc-border:${cc}70;` : '';
+        return `
+          <div class="gcard ${cc ? 'gcard-colored' : ''}" data-id="${g.id}" data-index="${i}"
+               style="${vars}"
+               draggable="true"
+               ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
+               ondragover="onDragOver(event)"
+               ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <div class="gcard-header">
+              <div class="gcard-icon">${typeIcon(g.type)}</div>
+              <div class="gcard-info">
+                <span class="gcard-title" onclick="event.stopPropagation(); editTitle(this, '${g.id}')">${esc(g.name)}</span>
+                <div class="gcard-subtitle">
+                  <div class="gcard-status ${sc}"></div>
+                  <span class="gcard-type">${g.type.replace('_',' ')}</span>
+                </div>
+              </div>
+              <div class="gcard-color-btn" style="background:${cc || 'var(--surface)'}" title="Card color">
+                <input type="color" value="${cc || '#1a1a24'}"
+                       oninput="previewCardColor('${g.id}', this.value)"
+                       onchange="setCardColor('${g.id}', this.value)">
+              </div>
+              <div class="gcard-btns">
+                <button class="btn-cue" onclick="cueGraphic('${g.id}')" title="Cue">◎</button>
+                <button class="${g.isLive ? 'btn-live' : ''}" onclick="toggleGraphic('${g.id}')">${g.isLive ? 'ON' : 'OFF'}</button>
+                <button class="btn-del" onclick="deleteGraphic('${g.id}')" title="Delete">✕</button>
+              </div>
+            </div>
+            <div class="gcard-body">
+              ${renderCardBody(g)}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderCardBody(g) {
+      const id = g.id;
+      switch (g.type) {
+        case 'lower_third':
+          return `
+            <div class="fg"><label>Title</label>
+              <input type="text" value="${esc(g.content.title)}" data-gid="${id}" data-field="title"
+                     oninput="uc('${id}','title',this.value)"></div>
+            <div class="fg"><label>Subtitle</label>
+              <input type="text" value="${esc(g.content.subtitle)}" data-gid="${id}" data-field="subtitle"
+                     oninput="uc('${id}','subtitle',this.value)"></div>`;
+
+        case 'message':
+          return `
+            <div class="fg"><label>Text</label>
+              <input type="text" value="${esc(g.content.text)}" data-gid="${id}" data-field="text"
+                     oninput="uc('${id}','text',this.value)"></div>
+            <div class="fg"><label>Detail</label>
+              <input type="text" value="${esc(g.content.detail)}" data-gid="${id}" data-field="detail"
+                     oninput="uc('${id}','detail',this.value)"></div>`;
+
+        case 'ticker':
+          return `
+            <div class="fg"><label>Items (one per line)</label>
+              <textarea rows="3" data-gid="${id}" data-field="items"
+                        oninput="uc('${id}','items',this.value.split('\\n').filter(Boolean))">${g.content.items.join('\n')}</textarea></div>
+            <div class="fg"><label>Speed (px/s)</label>
+              <input type="number" value="${g.content.speed}" data-gid="${id}" data-field="speed"
+                     oninput="uc('${id}','speed',+this.value)"></div>`;
+
+        case 'image':
+          return `
+            <div class="fg"><label>Image URL</label>
+              <input type="text" value="${esc(g.content.url)}" data-gid="${id}" data-field="url"
+                     oninput="uc('${id}','url',this.value)"></div>
+            <div class="fg"><label>Sizing</label>
+              <select data-gid="${id}" data-field="sizing"
+                      onchange="uc('${id}','sizing',this.value)">
+                <option value="contain" ${g.content.sizing==='contain'?'selected':''}>Contain</option>
+                <option value="cover" ${g.content.sizing==='cover'?'selected':''}>Cover</option>
+              </select></div>`;
+
+        case 'timer':
+          return `
+            <div class="row">
+              <div class="fg"><label>Mode</label>
+                <select data-gid="${id}" data-field="mode" onchange="uc('${id}','mode',this.value)">
+                  <option value="countdown" ${g.content.mode==='countdown'?'selected':''}>Countdown</option>
+                  <option value="countup" ${g.content.mode==='countup'?'selected':''}>Count Up</option>
+                  <option value="clock" ${g.content.mode==='clock'?'selected':''}>Clock</option>
+                </select></div>
+              <div class="fg"><label>Duration</label>
+                <input type="number" value="${g.content.duration}" data-gid="${id}" data-field="duration"
+                       oninput="uc('${id}','duration',+this.value)"></div>
+            </div>
+            <div class="row">
+              <div class="fg"><label>Format</label>
+                <input type="text" value="${esc(g.content.format)}" data-gid="${id}" data-field="format"
+                       oninput="uc('${id}','format',this.value)"></div>
+              <div class="fg"><label>Label</label>
+                <input type="text" value="${esc(g.content.label)}" data-gid="${id}" data-field="label"
+                       oninput="uc('${id}','label',this.value)"></div>
+            </div>`;
+
+        case 'score':
+          return scoreLine(id, g.content.team1, 'team1', 'Team 1')
+               + scoreLine(id, g.content.team2, 'team2', 'Team 2');
+
+        default: return '';
+      }
+    }
+
+    function scoreLine(id, team, key, label) {
+      return `
+        <div class="score-label">${label}</div>
+        <div class="score-line">
+          <input type="color" value="${team.color}" data-gid="${id}" data-field="${key}.color"
+                 oninput="usf('${id}','${key}','color',this.value)">
+          <input type="text" value="${esc(team.name)}" placeholder="Name" data-gid="${id}" data-field="${key}.name"
+                 oninput="usf('${id}','${key}','name',this.value)">
+          <button class="btn-ghost" onclick="adj('${id}','${key}',-1)">−</button>
+          <input type="number" value="${team.score}" data-gid="${id}" data-field="${key}.score"
+                 oninput="usf('${id}','${key}','score',+this.value)">
+          <button class="btn-ghost" onclick="adj('${id}','${key}',1)">+</button>
+        </div>`;
+    }
+
+    // ─── Variables ─────────────────────────────────────────────────────────
+    function renderVariables() {
+      const tc = document.getElementById('textVarsContainer');
+      tc.innerHTML = project.variables.text.map(v => `
+        <div class="form-group">
+          <label>${v.id}</label>
+          <input type="text" value="${esc(v.value)}" onchange="updateTextVar('${v.id}', this.value)" placeholder="Enter value...">
+        </div>
+      `).join('');
+      const lc = document.getElementById('listVarContainer');
+      const list = project.variables.lists[0];
+      if (!list) return;
+      lc.innerHTML = `
+        <table class="var-table">
+          <thead><tr><th>#</th>${list.columns.map((c,i) => `<th><input value="${esc(c)}" onchange="updateListCol(0,${i},this.value)"></th>`).join('')}<th></th></tr></thead>
+          <tbody>${list.rows.map((row, ri) => `
+            <tr class="${ri === list.selectedRow ? 'var-row-selected' : ''}">
+              <td style="cursor:pointer;text-align:center" onclick="selectListRow(0,${ri})">👉</td>
+              ${row.map((cell, ci) => `<td><input value="${esc(cell)}" onchange="updateListCell(0,${ri},${ci},this.value)"></td>`).join('')}
+              <td><button class="btn-ghost" style="padding:2px 6px" onclick="deleteListRow(0,${ri})">✕</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="list-controls">
+          <button class="btn-ghost" onclick="addListRow(0)">+ Add Row</button>
+          <button class="btn-ghost" onclick="selectListRow(0,Math.max(0,(project.variables.lists[0].selectedRow||0)-1))">◀ Prev</button>
+          <button class="btn-ghost" onclick="selectListRow(0,Math.min(project.variables.lists[0].rows.length-1,(project.variables.lists[0].selectedRow||0)+1))">Next ▶</button>
+        </div>`;
+    }
+
+    function updateTextVar(id, value) { const v = project.variables.text.find(t => t.id === id); if (v) v.value = value; save(); }
+    function updateListCol(li, ci, v) { project.variables.lists[li].columns[ci] = v; save(); }
+    function updateListCell(li, ri, ci, v) { project.variables.lists[li].rows[ri][ci] = v; save(); }
+    function selectListRow(li, ri) { project.variables.lists[li].selectedRow = ri; save(); }
+    function addListRow(li) { const l = project.variables.lists[li]; l.rows.push(l.columns.map(() => '')); save(); }
+    function deleteListRow(li, ri) { project.variables.lists[li].rows.splice(ri, 1); save(); }
+
+    // ─── Theme ─────────────────────────────────────────────────────────────
+    function renderTheme() {
+      const t = project.theme;
+      document.getElementById('themePrimary').value = t.primaryColor;
+      document.getElementById('themePrimaryText').value = t.primaryColor;
+      document.getElementById('themeSecondary').value = t.secondaryColor;
+      document.getElementById('themeSecondaryText').value = t.secondaryColor;
+      document.getElementById('themeText').value = t.textColor;
+      document.getElementById('themeTextText').value = t.textColor;
+      document.getElementById('themeFont').value = t.fontFamily;
+      document.getElementById('themeCSS').value = t.customCSS || '';
+    }
+    function updateThemeColor(k, v) { project.theme[k] = v; save(); }
+    function updateTheme(k, v) { project.theme[k] = v; save(); }
+
+    // ─── Actions ───────────────────────────────────────────────────────────
+    async function addGraphic(type) {
+      await fetch(`/api/${PROJECT_ID}/graphics`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, name: formatTypeName(type) })
+      });
+    }
+    function toggleGraphic(id) { socket.emit('graphic:toggle', { projectId: PROJECT_ID, graphicId: id }); }
+    function cueGraphic(id) { socket.emit('graphic:cue', { projectId: PROJECT_ID, graphicId: id }); }
+    async function runCued() { await fetch(`/api/${PROJECT_ID}/run`, { method: 'POST' }); }
+    async function clearAll() { await fetch(`/api/${PROJECT_ID}/clear`, { method: 'POST' }); }
+    async function deleteGraphic(id) {
+      if (!confirm('Delete this graphic?')) return;
+      await fetch(`/api/${PROJECT_ID}/graphics/${id}`, { method: 'DELETE' });
+    }
+
+    // ─── Edit shortcuts ────────────────────────────────────────────────────
+    function editTitle(el, id) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      const input = document.createElement('input');
+      input.className = 'gcard-title-input';
+      input.value = g.name;
+      input.onblur = () => { g.name = input.value; save(); };
+      input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = g.name; input.blur(); } };
+      el.replaceWith(input);
+      input.focus();
+      input.select();
+    }
+    function previewCardColor(id, color) {
+      const card = document.querySelector(`.gcard[data-id="${id}"]`);
+      if (!card) return;
+      card.classList.add('gcard-colored');
+      card.style.setProperty('--cc', color);
+      card.style.setProperty('--cc-bg', color + '18');
+      card.style.setProperty('--cc-surface', color + '30');
+      card.style.setProperty('--cc-border', color + '70');
+      card.querySelector('.gcard-color-btn').style.background = color;
+    }
+    function setCardColor(id, color) {
+      const g = project.graphics.find(g => g.id === id);
+      if (g) { g.cardColor = color; save(); }
+    }
+    // uc = update content, usf = update score field, adj = adjust score
+    function uc(id, key, value) {
+      const g = project.graphics.find(g => g.id === id);
+      if (g) { g.content[key] = value; save(); }
+    }
+    function usf(id, team, key, value) {
+      const g = project.graphics.find(g => g.id === id);
+      if (g) { g.content[team][key] = value; save(); }
+    }
+    function adj(id, team, delta) {
+      const g = project.graphics.find(g => g.id === id);
+      if (g) { g.content[team].score += delta; save(); }
+    }
+
+    // ─── Drag & Drop reorder ───────────────────────────────────────────────
+    let dragIdx = null;
+    function onDragStart(e) {
+      dragIdx = +e.currentTarget.dataset.index;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function onDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+    }
+    function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+    function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+    function onDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      const dropIdx = +e.currentTarget.dataset.index;
+      if (dragIdx === null || dragIdx === dropIdx) return;
+      const [moved] = project.graphics.splice(dragIdx, 1);
+      project.graphics.splice(dropIdx, 0, moved);
+      dragIdx = null;
+      save();
+    }
+
+    // ─── Lock ──────────────────────────────────────────────────────────────
+    function toggleLock() {
+      isLocked = !isLocked;
+      document.getElementById('lockOverlay').classList.toggle('active', isLocked);
+      document.getElementById('lockBar').style.display = isLocked ? '' : 'none';
+      document.getElementById('lockBtn').textContent = isLocked ? '🔒 Locked' : '🔓 Lock';
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────
+    function save() { socket.emit('project:save', project); }
+    function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
+    function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
+    function typeIcon(t) {
+      return { lower_third: '🎙', message: '📢', ticker: '📰', image: '🖼️', timer: '⏱️', score: '🏆' }[t] || '📦';
+    }
+    function formatTypeName(t) { return t.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
+    function esc(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  </script>
+</body>
+</html>
