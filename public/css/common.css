@@ -1,7 +1,7 @@
 /* ─── Reset & Base ───────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
+:root, [data-theme="dark"] {
   --bg: #0f0f12;
   --surface: #1a1a24;
   --surface2: #24243a;
@@ -16,6 +16,21 @@
   --yellow: #f1c40f;
   --radius: 8px;
   --transition: 0.2s ease;
+}
+
+[data-theme="light"] {
+  --bg: #f0f1f5;
+  --surface: #ffffff;
+  --surface2: #ecedf2;
+  --border: #d0d2dc;
+  --text: #1a1a2e;
+  --text-dim: #6b6d80;
+  --accent: #5b4cdb;
+  --accent-hover: #4a3cc0;
+  --red: #d32f3f;
+  --red-hover: #b71c2c;
+  --green: #27ae60;
+  --yellow: #d4a80f;
 }
 
 body {

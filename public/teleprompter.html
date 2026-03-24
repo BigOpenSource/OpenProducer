@@ -94,6 +94,7 @@
     .tp-action-badge.hide { background: rgba(230,57,70,0.15); color: var(--red); }
     .tp-action-badge.update { background: rgba(108,92,231,0.15); color: var(--accent); }
     .tp-action-badge.obs { background: rgba(241,196,15,0.15); color: var(--yellow); }
+    .tp-action-badge.wait { background: rgba(255,255,255,0.08); color: var(--text-dim); font-style: italic; }
 
     .tp-step-text {
       padding: 20px 24px;
@@ -190,6 +191,9 @@
         const state = i < currentStep ? 'done' : i === currentStep ? 'current' : '';
         const fired = firedSteps.has(i);
         const actionBadges = step.actions.map(a => {
+          if (a.type === 'wait') {
+            return `<span class="tp-action-badge wait">${esc('Wait ' + (a.duration||1) + 's')}</span>`;
+          }
           if (a.type === 'obs') {
             const obsLabels = {
               switch_scene: 'Scene', start_stream: 'Start Stream', stop_stream: 'Stop Stream',

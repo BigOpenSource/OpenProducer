@@ -315,14 +315,17 @@
       <a href="#" onclick="openOutput()">Output</a>
       <a href="#" onclick="openPreview()">Preview</a>
       <a href="/">Launcher</a>
+      <button onclick="toggleThemeMode()" id="themeToggle" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:13px;border-radius:6px;cursor:pointer">🌙</button>
     </div>
   </header>
 
   <div class="tabs" id="mainTabs">
     <button class="tab active" data-tab="rundown">Rundown</button>
     <button class="tab" data-tab="scripts">Scripts</button>
+    <button class="tab" data-tab="formats">Formats</button>
     <button class="tab" data-tab="variables">Variables</button>
     <button class="tab" data-tab="theme">Theme</button>
+    <button class="tab" data-tab="settings">Settings</button>
   </div>
 
   <div class="main">
@@ -335,18 +338,6 @@
         <button class="graphic-type-btn" onclick="addGraphic('image')"><span class="icon">🖼</span> Image</button>
         <button class="graphic-type-btn" onclick="addGraphic('timer')"><span class="icon">⏱</span> Timer</button>
         <button class="graphic-type-btn" onclick="addGraphic('score')"><span class="icon">⚽</span> Scoreboard</button>
-      </div>
-      <div class="obs-section" id="obsSection">
-        <h3>OBS Studio</h3>
-        <div class="obs-status">
-          <div class="obs-dot" id="obsDot"></div>
-          <span id="obsLabel">Disconnected</span>
-        </div>
-        <div class="obs-connect-form">
-          <input type="text" id="obsUrl" placeholder="ws://localhost:4455" value="ws://localhost:4455">
-          <input type="password" id="obsPassword" placeholder="Password (optional)">
-          <button class="btn-ghost" onclick="connectOBS()" id="obsConnectBtn">Connect</button>
-        </div>
       </div>
     </div>
 
@@ -371,6 +362,15 @@
         <button class="btn-primary" onclick="addScript()" style="font-size:12px;padding:5px 12px">+ New Script</button>
       </div>
       <div id="scriptsContainer"></div>
+    </div>
+
+    <!-- Tab: Formats -->
+    <div class="tab-content" id="tab-formats">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>Formats</h3>
+        <button class="btn-primary" onclick="addFormat()" style="font-size:12px;padding:5px 12px">+ New Format</button>
+      </div>
+      <div id="formatsContainer"></div>
     </div>
 
     <!-- Tab: Variables -->
@@ -418,9 +418,95 @@
         </div>
       </div>
     </div>
+
+    <!-- Tab: Settings -->
+    <div class="tab-content" id="tab-settings">
+      <h3 style="margin-bottom:16px">Settings</h3>
+      <div class="flex flex-col gap-lg" style="max-width:500px">
+        <div style="border-bottom:1px solid var(--border);padding-bottom:16px">
+          <h4 style="font-size:13px;margin-bottom:10px">AI Script Generation</h4>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Anthropic API Key</label>
+            <input type="password" id="setApiKey" placeholder="sk-ant-..." onchange="updateSetting('anthropicApiKey', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Model</label>
+            <select id="setModel" onchange="updateSetting('aiModel', this.value)">
+              <option value="claude-opus-4-6">Claude Opus 4.6</option>
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+            </select>
+          </div>
+        </div>
+        <div style="border-bottom:1px solid var(--border);padding-bottom:16px">
+          <h4 style="font-size:13px;margin-bottom:10px">OBS Studio</h4>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>WebSocket URL</label>
+            <input type="text" id="setObsUrl" placeholder="ws://localhost:4455" onchange="updateSetting('obsUrl', this.value)">
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Password</label>
+            <input type="password" id="setObsPass" placeholder="Optional" onchange="updateSetting('obsPassword', this.value)">
+          </div>
+          <div class="flex gap-sm items-center">
+            <div class="obs-dot" id="obsDotSettings"></div>
+            <span id="obsLabelSettings" style="font-size:12px;color:var(--text-dim)">Disconnected</span>
+            <button class="btn-ghost" onclick="connectOBSFromSettings()" style="margin-left:8px;font-size:12px;padding:4px 12px" id="obsConnectBtnSettings">Connect</button>
+          </div>
+        </div>
+        <div>
+          <h4 style="font-size:13px;margin-bottom:10px">Working Directory</h4>
+          <div class="form-group">
+            <label>Local path for project files</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" id="setWorkDir" placeholder="/Users/you/broadcast-files" onchange="updateSetting('workingDirectory', this.value)" style="flex:1">
+              <button class="btn-ghost" onclick="pickFolder()" style="white-space:nowrap;padding:6px 14px">Browse...</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="lock-overlay" id="lockOverlay"></div>
+
+  <!-- Format generator modal -->
+  <div class="modal-overlay" id="formatModal">
+    <div class="modal" style="min-width:700px;max-width:850px;max-height:90vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
+        <h2 id="formatModalTitle" style="margin:0">Generate Script</h2>
+        <button class="btn-primary" onclick="aiGenerate()" id="aiGenBtn" style="font-size:12px;padding:6px 16px">✨ Generate with AI</button>
+      </div>
+      <div class="form-group" style="margin-bottom:8px;flex-shrink:0">
+        <label>Script Name</label>
+        <input type="text" id="fmScriptName" style="width:100%">
+      </div>
+      <div class="form-group" style="margin-bottom:8px;flex-shrink:0">
+        <label>Global Notes (context for AI)</label>
+        <textarea id="fmGlobalNotes" rows="2" placeholder="Overall context, topic, guests, etc." style="width:100%;font-size:12px"></textarea>
+      </div>
+      <div style="margin-bottom:10px;flex-shrink:0">
+        <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);display:block;margin-bottom:4px">Reference Media</label>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap" id="fmGlobalMedia"></div>
+        <button class="btn-ghost" style="font-size:11px;padding:3px 10px;margin-top:4px" onclick="uploadGlobalMedia()">+ Upload Media</button>
+      </div>
+      <div style="margin-bottom:10px;flex-shrink:0;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface)">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="fmAiActions" onchange="toggleAiActions()">
+          <span>Allow AI to add actions into the script</span>
+        </label>
+        <div id="fmAiActionsPanel" style="display:none;margin-top:8px">
+          <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);display:block;margin-bottom:6px">Available actions for AI</label>
+          <div id="fmAiActionsList" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div id="fmSteps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px"></div>
+      <div class="modal-actions" style="flex-shrink:0">
+        <button class="btn-ghost" onclick="closeFormatModal()">Cancel</button>
+        <button class="btn-primary" onclick="generateScript()">Create Script</button>
+      </div>
+    </div>
+  </div>
   <div class="lock-bar" id="lockBar" style="display:none" onclick="toggleLock()">🔒 Show Locked — Click to Unlock</div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -434,12 +520,14 @@
 
     // OBS status
     socket.on('obs:status', (s) => {
-      const dot = document.getElementById('obsDot');
-      const label = document.getElementById('obsLabel');
-      const btn = document.getElementById('obsConnectBtn');
-      if (dot) dot.className = 'obs-dot ' + (s.connected ? 'on' : 'off');
-      if (label) label.textContent = s.connected ? 'Connected' : (s.error || 'Disconnected');
-      if (btn) btn.textContent = s.connected ? 'Disconnect' : 'Connect';
+      ['', 'Settings'].forEach(suffix => {
+        const dot = document.getElementById('obsDot' + suffix);
+        const label = document.getElementById('obsLabel' + suffix);
+        const btn = document.getElementById('obsConnectBtn' + suffix);
+        if (dot) dot.className = 'obs-dot ' + (s.connected ? 'on' : 'off');
+        if (label) label.textContent = s.connected ? 'Connected' : (s.error || 'Disconnected');
+        if (btn) btn.textContent = s.connected ? 'Disconnect' : 'Connect';
+      });
     });
 
     socket.on('project:update', (p) => {
@@ -481,7 +569,9 @@
       renderRundown();
       renderVariables();
       renderScripts();
+      renderFormats();
       renderTheme();
+      renderSettings();
     }
 
     function renderRundown() {
@@ -678,6 +768,36 @@
     function updateThemeColor(k, v) { project.theme[k] = v; save(); }
     function updateTheme(k, v) { project.theme[k] = v; save(); }
 
+    // ─── Settings ─────────────────────────────────────────────────────────
+    function renderSettings() {
+      if (!project.settings) project.settings = {};
+      const s = project.settings;
+      const el = (id) => document.getElementById(id);
+      if (el('setApiKey')) el('setApiKey').value = s.anthropicApiKey || '';
+      if (el('setModel')) el('setModel').value = s.aiModel || 'claude-opus-4-6';
+      if (el('setObsUrl')) el('setObsUrl').value = s.obsUrl || 'ws://localhost:4455';
+      if (el('setObsPass')) el('setObsPass').value = s.obsPassword || '';
+      if (el('setWorkDir')) el('setWorkDir').value = s.workingDirectory || '';
+    }
+    function updateSetting(k, v) {
+      if (!project.settings) project.settings = {};
+      project.settings[k] = v;
+      save();
+    }
+    async function pickFolder() {
+      const res = await fetch('/api/pick-folder', { method: 'POST' });
+      const data = await res.json();
+      if (data.path) {
+        document.getElementById('setWorkDir').value = data.path;
+        updateSetting('workingDirectory', data.path);
+      }
+    }
+    function connectOBSFromSettings() {
+      const url = document.getElementById('setObsUrl').value;
+      const password = document.getElementById('setObsPass').value;
+      socket.emit('obs:connect', { url, password });
+    }
+
     // ─── Actions ───────────────────────────────────────────────────────────
     async function addGraphic(type) {
       await fetch(`/api/${PROJECT_ID}/graphics`, {
@@ -830,9 +950,8 @@
     }
 
     function renderAction(a, ai, si, sti, graphicOpts) {
-      if (a.type === 'obs') {
-        return renderOBSAction(a, ai, si, sti);
-      }
+      if (a.type === 'obs') return renderOBSAction(a, ai, si, sti);
+      if (a.type === 'wait') return renderWaitAction(a, ai, si, sti);
       const g = project.graphics.find(g => g.id === a.graphicId);
       let extra = '';
       if (a.type === 'update' && g) {
@@ -851,6 +970,7 @@
           <option value="hide" ${a.type==='hide'?'selected':''}>Hide</option>
           <option value="update" ${a.type==='update'?'selected':''}>Update</option>
           <option value="obs" ${a.type==='obs'?'selected':''}>OBS</option>
+          <option value="wait" ${a.type==='wait'?'selected':''}>Wait</option>
         </select>
         <select onchange="updateAction(${si},${sti},${ai},'graphicId',this.value)">
           <option value="">Graphic...</option>
@@ -871,6 +991,7 @@
           <option value="hide">Hide</option>
           <option value="update">Update</option>
           <option value="obs" selected>OBS</option>
+          <option value="wait">Wait</option>
         </select>
         <select onchange="updateAction(${si},${sti},${ai},'obsAction',this.value)">
           <option value="">Action...</option>
@@ -895,6 +1016,24 @@
         </select>
         ${needsValue ? `<input type="text" value="${esc(a.obsValue||'')}" placeholder="${placeholder}"
           onchange="updateAction(${si},${sti},${ai},'obsValue',this.value)" class="action-target">` : ''}
+        <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function renderWaitAction(a, ai, si, sti) {
+      return `<div class="step-action" style="border-color:#4a4a00;background:rgba(241,196,15,0.05)">
+        <select onchange="updateAction(${si},${sti},${ai},'type',this.value)">
+          <option value="show">Show</option>
+          <option value="hide">Hide</option>
+          <option value="update">Update</option>
+          <option value="obs">OBS</option>
+          <option value="wait" selected>Wait</option>
+        </select>
+        <span style="font-size:12px;color:var(--text-dim)">for</span>
+        <input type="number" value="${a.duration || 1}" min="0.1" step="0.1" style="width:60px;text-align:center"
+               onchange="updateAction(${si},${sti},${ai},'duration',+this.value)">
+        <span style="font-size:12px;color:var(--text-dim)">seconds</span>
+        <span style="flex:1"></span>
         <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
       </div>`;
     }
@@ -983,6 +1122,413 @@
       window.open(`/teleprompter-flow/${PROJECT_ID}/${scriptId}`, '_blank', 'width=800,height=900');
     }
 
+    // ─── Formats ────────────────────────────────────────────────────────────
+    let expandedFormatIdx = 0;
+
+    function renderFormats() {
+      if (!project) return;
+      if (!project.formats) project.formats = [];
+      const c = document.getElementById('formatsContainer');
+      if (!c) return;
+      if (project.formats.length === 0) {
+        c.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:40px">No formats yet. Create a template to generate scripts consistently.</div>';
+        return;
+      }
+      c.innerHTML = project.formats.map((f, fi) => `
+        <div class="script-card">
+          <div class="script-header" onclick="toggleFormat(${fi})">
+            <span style="font-size:18px">📐</span>
+            <span class="script-name">${esc(f.name)}</span>
+            <button class="btn-primary" style="font-size:11px;padding:4px 12px" onclick="event.stopPropagation(); openFormatModal(${fi})">+ Generate Script</button>
+            <button class="btn-ghost" onclick="event.stopPropagation(); renameFormat(${fi})" title="Rename">✎</button>
+            <button class="btn-ghost" onclick="event.stopPropagation(); deleteFormat(${fi})" title="Delete" style="color:#666">✕</button>
+          </div>
+          ${expandedFormatIdx === fi ? renderFormatBody(f, fi) : ''}
+        </div>
+      `).join('');
+    }
+
+    function toggleFormat(fi) {
+      expandedFormatIdx = expandedFormatIdx === fi ? -1 : fi;
+      renderFormats();
+    }
+
+    function renderFormatBody(f, fi) {
+      return `<div class="script-body">
+        <div class="script-steps">
+          ${f.steps.map((step, sti) => renderFormatStep(step, fi, sti)).join('')}
+        </div>
+        <button class="add-step-btn" onclick="addFormatStep(${fi})">+ Add Step</button>
+      </div>`;
+    }
+
+    function renderFormatStep(step, fi, sti) {
+      const graphicOpts = project.graphics.map(g =>
+        `<option value="${g.id}">${esc(g.name)} (${g.type.replace('_',' ')})</option>`
+      ).join('');
+      return `<div class="step-card">
+        <div class="step-header">
+          <div class="step-num">${sti + 1}</div>
+          <input type="text" value="${esc(step.label||'')}" placeholder="Step label (e.g. Guest Intro)"
+                 style="flex:1;font-size:12px;padding:3px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                 onchange="updateFmtStep(${fi},${sti},'label',this.value)">
+          <div class="step-btns">
+            <button class="btn-ghost" onclick="updateFmtStep(${fi},${sti},'locked',!project.formats[${fi}].steps[${sti}].locked); renderFormats()"
+                    title="${step.locked ? 'Unlock' : 'Lock'}" style="${step.locked ? 'color:var(--yellow)' : ''}">
+              ${step.locked ? '🔒' : '🔓'}
+            </button>
+            ${sti > 0 ? `<button class="btn-ghost" onclick="moveFmtStep(${fi},${sti},-1)">▲</button>` : ''}
+            ${sti < project.formats[fi].steps.length - 1 ? `<button class="btn-ghost" onclick="moveFmtStep(${fi},${sti},1)">▼</button>` : ''}
+            <button class="btn-ghost" onclick="removeFmtStep(${fi},${sti})" style="color:#666">✕</button>
+          </div>
+        </div>
+        ${step.locked ? `<div style="font-size:11px;color:var(--yellow);padding:4px 0">🔒 Locked — this step will not change during generation</div>` : ''}
+        <textarea placeholder="Default teleprompter text..." ${step.locked ? 'style="opacity:0.5"' : ''}
+                  onchange="updateFmtStep(${fi},${sti},'defaultText',this.value)">${esc(step.defaultText||'')}</textarea>
+        <div class="step-actions">
+          ${step.actions.map((a, ai) => renderFmtAction(a, ai, fi, sti, graphicOpts)).join('')}
+        </div>
+        <button class="btn-ghost" style="font-size:11px;padding:3px 8px;align-self:flex-start"
+                onclick="addFmtAction(${fi},${sti})">+ Action</button>
+      </div>`;
+    }
+
+    function renderFmtAction(a, ai, fi, sti, graphicOpts) {
+      // Reuse script action renderers but with format update functions
+      if (a.type === 'wait') {
+        return `<div class="step-action" style="border-color:#4a4a00;background:rgba(241,196,15,0.05)">
+          <select onchange="updateFmtAction(${fi},${sti},${ai},'type',this.value)">
+            <option value="show">Show</option><option value="hide">Hide</option><option value="update">Update</option>
+            <option value="obs">OBS</option><option value="wait" selected>Wait</option>
+          </select>
+          <span style="font-size:12px;color:var(--text-dim)">for</span>
+          <input type="number" value="${a.duration||1}" min="0.1" step="0.1" style="width:60px;text-align:center"
+                 onchange="updateFmtAction(${fi},${sti},${ai},'duration',+this.value)">
+          <span style="font-size:12px;color:var(--text-dim)">seconds</span>
+          <span style="flex:1"></span>
+          <button class="action-remove" onclick="removeFmtAction(${fi},${sti},${ai})">✕</button>
+        </div>`;
+      }
+      if (a.type === 'obs') {
+        const obsAct = a.obsAction || '';
+        const needsValue = ['switch_scene','mute','unmute','toggle_mute'].includes(obsAct);
+        const placeholder = obsAct === 'switch_scene' ? 'Scene name' : 'Input name';
+        return `<div class="step-action obs-action">
+          <select onchange="updateFmtAction(${fi},${sti},${ai},'type',this.value)">
+            <option value="show">Show</option><option value="hide">Hide</option><option value="update">Update</option>
+            <option value="obs" selected>OBS</option><option value="wait">Wait</option>
+          </select>
+          <select onchange="updateFmtAction(${fi},${sti},${ai},'obsAction',this.value)">
+            <option value="">Action...</option>
+            <optgroup label="Scenes"><option value="switch_scene" ${obsAct==='switch_scene'?'selected':''}>Switch Scene</option></optgroup>
+            <optgroup label="Streaming"><option value="start_stream" ${obsAct==='start_stream'?'selected':''}>Start Stream</option><option value="stop_stream" ${obsAct==='stop_stream'?'selected':''}>Stop Stream</option><option value="toggle_stream" ${obsAct==='toggle_stream'?'selected':''}>Toggle Stream</option></optgroup>
+            <optgroup label="Recording"><option value="start_record" ${obsAct==='start_record'?'selected':''}>Start Record</option><option value="stop_record" ${obsAct==='stop_record'?'selected':''}>Stop Record</option><option value="toggle_record" ${obsAct==='toggle_record'?'selected':''}>Toggle Record</option></optgroup>
+            <optgroup label="Audio"><option value="mute" ${obsAct==='mute'?'selected':''}>Mute</option><option value="unmute" ${obsAct==='unmute'?'selected':''}>Unmute</option><option value="toggle_mute" ${obsAct==='toggle_mute'?'selected':''}>Toggle Mute</option></optgroup>
+          </select>
+          ${needsValue ? `<input type="text" value="${esc(a.obsValue||'')}" placeholder="${placeholder}"
+            onchange="updateFmtAction(${fi},${sti},${ai},'obsValue',this.value)" class="action-target">` : ''}
+          <button class="action-remove" onclick="removeFmtAction(${fi},${sti},${ai})">✕</button>
+        </div>`;
+      }
+      const g = project.graphics.find(g => g.id === a.graphicId);
+      let extra = '';
+      if (a.type === 'update' && g) {
+        const fields = getFieldsForType(g.type);
+        extra = `<select onchange="updateFmtAction(${fi},${sti},${ai},'path',this.value)" style="min-width:70px">
+            <option value="">Field...</option>
+            ${fields.map(f => `<option value="${f.path}" ${a.path===f.path?'selected':''}>${f.label}</option>`).join('')}
+          </select>
+          <input type="text" value="${esc(a.value||'')}" placeholder="Value"
+                 onchange="updateFmtAction(${fi},${sti},${ai},'value',this.value)" class="action-target">`;
+      }
+      return `<div class="step-action">
+        <select onchange="updateFmtAction(${fi},${sti},${ai},'type',this.value)">
+          <option value="show" ${a.type==='show'?'selected':''}>Show</option>
+          <option value="hide" ${a.type==='hide'?'selected':''}>Hide</option>
+          <option value="update" ${a.type==='update'?'selected':''}>Update</option>
+          <option value="obs" ${a.type==='obs'?'selected':''}>OBS</option>
+          <option value="wait" ${a.type==='wait'?'selected':''}>Wait</option>
+        </select>
+        <select onchange="updateFmtAction(${fi},${sti},${ai},'graphicId',this.value)">
+          <option value="">Graphic...</option>
+          ${graphicOpts.replace('value="'+a.graphicId+'"', 'value="'+a.graphicId+'" selected')}
+        </select>
+        ${extra}
+        <button class="action-remove" onclick="removeFmtAction(${fi},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function addFormat() {
+      if (!project.formats) project.formats = [];
+      project.formats.push({
+        id: Math.random().toString(36).slice(2, 10).toUpperCase(),
+        name: 'Format ' + (project.formats.length + 1),
+        steps: [{ id: genStepId(), label: '', defaultText: '', actions: [] }]
+      });
+      expandedFormatIdx = project.formats.length - 1;
+      save();
+    }
+    function deleteFormat(fi) { if (confirm('Delete this format?')) { project.formats.splice(fi, 1); save(); } }
+    function renameFormat(fi) { const n = prompt('Format name:', project.formats[fi].name); if (n) { project.formats[fi].name = n; save(); } }
+    function addFormatStep(fi) { project.formats[fi].steps.push({ id: genStepId(), label: '', defaultText: '', actions: [] }); save(); }
+    function removeFmtStep(fi, sti) { project.formats[fi].steps.splice(sti, 1); save(); }
+    function moveFmtStep(fi, sti, dir) { const s = project.formats[fi].steps; const [m] = s.splice(sti, 1); s.splice(sti + dir, 0, m); save(); }
+    function updateFmtStep(fi, sti, key, val) { project.formats[fi].steps[sti][key] = val; save(); }
+    function addFmtAction(fi, sti) { project.formats[fi].steps[sti].actions.push({ type: 'show', graphicId: '', path: '', value: '' }); save(); }
+    function removeFmtAction(fi, sti, ai) { project.formats[fi].steps[sti].actions.splice(ai, 1); save(); }
+    function updateFmtAction(fi, sti, ai, key, val) { project.formats[fi].steps[sti].actions[ai][key] = val; save(); }
+
+    // ─── Format Generator Modal ─────────────────────────────────────────────
+    let currentFormatIdx = -1;
+    let modalSteps = [];
+    let modalGlobalNotes = '';
+    let modalGlobalMedia = [];
+    let aiActionsEnabled = false;
+    let aiAvailableActions = []; // [{id, label, type, graphicId, ...}]
+
+    function openFormatModal(fi) {
+      currentFormatIdx = fi;
+      const fmt = project.formats[fi];
+      document.getElementById('fmScriptName').value = fmt.name;
+      modalGlobalNotes = '';
+      modalGlobalMedia = [];
+      // Deep clone steps, add notes/media fields
+      modalSteps = JSON.parse(JSON.stringify(fmt.steps));
+      modalSteps.forEach(s => { s.notes = s.notes || ''; s.media = s.media || []; s.text = s.text || s.defaultText || ''; });
+      aiActionsEnabled = false;
+      aiAvailableActions = buildAvailableActions();
+      renderModalSteps();
+      renderGlobalMedia();
+      renderAiActionsPanel();
+      document.getElementById('fmGlobalNotes').value = '';
+      document.getElementById('fmAiActions').checked = false;
+      document.getElementById('fmAiActionsPanel').style.display = 'none';
+      document.getElementById('formatModal').classList.add('open');
+    }
+
+    function closeFormatModal() {
+      document.getElementById('formatModal').classList.remove('open');
+    }
+
+    function renderModalSteps() {
+      const c = document.getElementById('fmSteps');
+      c.innerHTML = modalSteps.map((step, i) => {
+        const isLocked = step.locked;
+        const actionSummaries = step.actions.map((a, ai) => {
+          if (a.type === 'wait') return `<div class="step-action" style="font-size:11px;padding:3px 6px;border-color:#4a4a00">⏱ Wait ${a.duration||1}s</div>`;
+          if (a.type === 'obs') return `<div class="step-action obs-action" style="font-size:11px;padding:3px 6px">OBS: ${a.obsAction||'?'}${a.obsValue ? ' → '+a.obsValue : ''}</div>`;
+          const g = project.graphics.find(g => g.id === a.graphicId);
+          const gn = g ? g.name : '?';
+          if (a.type === 'show') return `<div class="step-action" style="font-size:11px;padding:3px 6px">Show: ${esc(gn)}</div>`;
+          if (a.type === 'hide') return `<div class="step-action" style="font-size:11px;padding:3px 6px">Hide: ${esc(gn)}</div>`;
+          if (a.type === 'update') {
+            return `<div class="step-action" style="font-size:11px;padding:3px 6px;gap:4px">
+              Update: ${esc(gn)}.${a.path} =
+              <input type="text" value="${esc(a.value||'')}" style="flex:1;font-size:11px;padding:2px 6px"
+                     onchange="modalSteps[${i}].actions[${ai}].value=this.value" ${isLocked ? 'disabled' : ''}>
+            </div>`;
+          }
+          return '';
+        }).join('');
+
+        const mediaThumbsHTML = (step.media||[]).map((u,mi) =>
+          `<span style="font-size:11px;background:var(--border);padding:2px 6px;border-radius:3px;display:inline-flex;align-items:center;gap:4px">
+            📎 ${esc(u.split('/').pop())}
+            ${!isLocked ? `<span style="cursor:pointer;color:#888" onclick="modalSteps[${i}].media.splice(${mi},1);renderModalSteps()">✕</span>` : ''}
+          </span>`
+        ).join('');
+
+        return `<div class="step-card" style="background:var(--surface);${isLocked ? 'opacity:0.6;border-color:var(--yellow)' : ''}">
+          <div class="step-header">
+            <div class="step-num">${i + 1}</div>
+            <span style="font-size:12px;font-weight:600;color:${isLocked ? 'var(--yellow)' : 'var(--accent)'}">
+              ${isLocked ? '🔒 ' : ''}${esc(step.label || 'Step ' + (i+1))}
+            </span>
+          </div>
+          <textarea style="width:100%;font-size:13px;padding:8px 10px;min-height:50px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;resize:vertical"
+                    onchange="modalSteps[${i}].text=this.value" ${isLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;width:100%;font-size:13px;padding:8px 10px;min-height:50px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit"' : ''}>${esc(step.text || '')}</textarea>
+          ${!isLocked ? `<div style="display:flex;gap:6px;align-items:flex-start">
+            <textarea rows="1" placeholder="Notes for AI (context, instructions...)" style="flex:1;font-size:11px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-family:inherit;resize:vertical"
+                      onchange="modalSteps[${i}].notes=this.value">${esc(step.notes||'')}</textarea>
+            <button class="btn-ghost" style="font-size:10px;padding:4px 8px;white-space:nowrap" onclick="uploadStepMedia(${i})">📎 Media</button>
+          </div>` : ''}
+          ${mediaThumbsHTML ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${mediaThumbsHTML}</div>` : ''}
+          ${actionSummaries ? `<div class="step-actions">${actionSummaries}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    function renderGlobalMedia() {
+      const c = document.getElementById('fmGlobalMedia');
+      if (!c) return;
+      c.innerHTML = modalGlobalMedia.map((u, i) =>
+        `<span style="font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px">
+          📎 ${esc(u.split('/').pop())}
+          <span style="cursor:pointer;color:#888" onclick="modalGlobalMedia.splice(${i},1);renderGlobalMedia()">✕</span>
+        </span>`
+      ).join('');
+    }
+
+    function uploadGlobalMedia() {
+      const input = document.createElement('input');
+      input.type = 'file'; input.multiple = true;
+      input.accept = 'image/*,video/*,audio/*';
+      input.onchange = async () => {
+        for (const file of input.files) {
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+          const { url } = await res.json();
+          modalGlobalMedia.push(url);
+        }
+        renderGlobalMedia();
+      };
+      input.click();
+    }
+
+    function uploadStepMedia(stepIdx) {
+      const input = document.createElement('input');
+      input.type = 'file'; input.multiple = true;
+      input.accept = 'image/*,video/*,audio/*';
+      input.onchange = async () => {
+        if (!modalSteps[stepIdx].media) modalSteps[stepIdx].media = [];
+        for (const file of input.files) {
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+          const { url } = await res.json();
+          modalSteps[stepIdx].media.push(url);
+        }
+        renderModalSteps();
+      };
+      input.click();
+    }
+
+    function buildAvailableActions() {
+      const actions = [];
+      project.graphics.forEach(g => {
+        actions.push({ id: `show_${g.id}`, label: `Show: ${g.name}`, type: 'show', graphicId: g.id, enabled: true });
+        actions.push({ id: `hide_${g.id}`, label: `Hide: ${g.name}`, type: 'hide', graphicId: g.id, enabled: true });
+        const fields = getFieldsForType(g.type);
+        fields.forEach(f => {
+          actions.push({ id: `update_${g.id}_${f.path}`, label: `Update ${g.name} → ${f.label}`, type: 'update', graphicId: g.id, path: f.path, enabled: true });
+        });
+      });
+      // OBS actions
+      ['switch_scene','start_stream','stop_stream','start_record','stop_record','mute','unmute'].forEach(obsAct => {
+        const labels = { switch_scene:'Switch Scene', start_stream:'Start Stream', stop_stream:'Stop Stream', start_record:'Start Record', stop_record:'Stop Record', mute:'Mute Input', unmute:'Unmute Input' };
+        actions.push({ id: `obs_${obsAct}`, label: `OBS: ${labels[obsAct]}`, type: 'obs', obsAction: obsAct, enabled: true });
+      });
+      // Wait
+      actions.push({ id: 'wait', label: 'Wait (delay)', type: 'wait', enabled: true });
+      return actions;
+    }
+
+    function toggleAiActions() {
+      aiActionsEnabled = document.getElementById('fmAiActions').checked;
+      document.getElementById('fmAiActionsPanel').style.display = aiActionsEnabled ? '' : 'none';
+    }
+
+    function renderAiActionsPanel() {
+      const c = document.getElementById('fmAiActionsList');
+      if (!c) return;
+      c.innerHTML = aiAvailableActions.map((a, i) => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:4px;background:var(--bg)">
+          <input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="aiAvailableActions[${i}].enabled=this.checked">
+          <span>${esc(a.label)}</span>
+        </label>
+      `).join('');
+    }
+
+    async function aiGenerate() {
+      const btn = document.getElementById('aiGenBtn');
+      const origText = btn.textContent;
+      btn.textContent = '⏳ Generating...';
+      btn.disabled = true;
+
+      // Sync textarea values
+      document.querySelectorAll('#fmSteps textarea').forEach((ta, idx) => {
+        // First textarea per step is the text, second (if exists) is notes
+        const stepCard = ta.closest('.step-card');
+        const stepIdx = Array.from(document.querySelectorAll('#fmSteps .step-card')).indexOf(stepCard);
+        const textareas = stepCard.querySelectorAll('textarea');
+        if (ta === textareas[0] && modalSteps[stepIdx]) modalSteps[stepIdx].text = ta.value;
+        if (ta === textareas[1] && modalSteps[stepIdx]) modalSteps[stepIdx].notes = ta.value;
+      });
+
+      const globalNotes = document.getElementById('fmGlobalNotes').value;
+      const fmt = project.formats[currentFormatIdx];
+
+      try {
+        const res = await fetch(`/api/${PROJECT_ID}/generate-script`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            formatName: fmt.name,
+            globalNotes,
+            globalMedia: modalGlobalMedia,
+            aiActionsEnabled,
+            aiAvailableActions: aiActionsEnabled ? aiAvailableActions.filter(a => a.enabled) : [],
+            steps: modalSteps.map(s => ({
+              label: s.label,
+              locked: s.locked,
+              text: s.text,
+              defaultText: s.defaultText,
+              notes: s.notes,
+              media: s.media,
+              actions: s.actions
+            }))
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert('AI Error: ' + data.error);
+        } else if (data.steps) {
+          data.steps.forEach((step, i) => {
+            if (modalSteps[i] && !modalSteps[i].locked) {
+              if (typeof step === 'string') {
+                modalSteps[i].text = step;
+              } else if (step && typeof step === 'object') {
+                modalSteps[i].text = step.text || modalSteps[i].text;
+                if (step.actions && Array.isArray(step.actions)) {
+                  modalSteps[i].actions = [...modalSteps[i].actions, ...step.actions];
+                }
+              }
+            }
+          });
+          renderModalSteps();
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
+
+    function generateScript() {
+      // Read textarea values from the DOM (onchange may not have fired for all)
+      const textareas = document.querySelectorAll('#fmSteps textarea');
+      textareas.forEach((ta, i) => { if (modalSteps[i]) modalSteps[i].text = ta.value; });
+
+      const scriptName = document.getElementById('fmScriptName').value || 'Untitled Script';
+      const newScript = {
+        id: Math.random().toString(36).slice(2, 10).toUpperCase(),
+        name: scriptName,
+        steps: modalSteps.map(s => ({
+          id: genStepId(),
+          text: s.text || s.defaultText || '',
+          actions: JSON.parse(JSON.stringify(s.actions))
+        }))
+      };
+      if (!project.scripts) project.scripts = [];
+      project.scripts.push(newScript);
+      save();
+      closeFormatModal();
+      // Switch to Scripts tab
+      document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('[data-tab="scripts"]').classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-scripts').classList.add('active');
+      document.getElementById('sidebar').style.display = 'none';
+      expandedScriptIdx = project.scripts.length - 1;
+    }
+
     // ─── Drag & Drop reorder ───────────────────────────────────────────────
     let dragIdx = null;
     function onDragStart(e) {
@@ -1016,11 +1562,21 @@
 
     // ─── Helpers ───────────────────────────────────────────────────────────
     function save() { socket.emit('project:save', project); }
-    async function connectOBS() {
-      const url = document.getElementById('obsUrl').value;
-      const password = document.getElementById('obsPassword').value;
-      socket.emit('obs:connect', { url, password });
+    function toggleThemeMode() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      document.getElementById('themeToggle').textContent = next === 'dark' ? '🌙' : '☀️';
+      localStorage.setItem('theme', next);
     }
+    // Restore on load
+    (function() {
+      const saved = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      const btn = document.getElementById('themeToggle');
+      if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀️';
+    })();
+
     function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
     function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
     function typeIcon(t) {

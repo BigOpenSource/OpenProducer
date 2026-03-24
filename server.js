@@ -80,7 +80,15 @@ function createDefaultProject(name) {
       fontFamily: 'Arial, sans-serif',
       customCSS: ''
     },
-    scripts: []
+    scripts: [],
+    formats: [],
+    settings: {
+      anthropicApiKey: '',
+      aiModel: 'claude-opus-4-6',
+      obsUrl: 'ws://localhost:4455',
+      obsPassword: '',
+      workingDirectory: ''
+    }
   };
 }
 
@@ -319,6 +327,125 @@ app.post('/api/:projectId/updateVariableList/:listId/selectRow/:selector', (req,
   res.json({ ok: true });
 });
 
+// ─── AI Script Generation ───────────────────────────────────────────────────
+app.post('/api/:projectId/generate-script', async (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const settings = project.settings || {};
+  const apiKey = settings.anthropicApiKey;
+  if (!apiKey) return res.status(400).json({ error: 'Anthropic API key not set. Go to Settings.' });
+
+  const { steps, globalNotes, globalMedia, formatName, aiActionsEnabled, aiAvailableActions } = req.body;
+  const canAddActions = aiActionsEnabled && aiAvailableActions && aiAvailableActions.length > 0;
+
+  // Build prompt
+  let systemPrompt = `You are a broadcast script writer. You generate teleprompter scripts for live productions.
+Write natural, conversational teleprompter text that a host can read aloud.
+For locked steps, return the exact existing text unchanged.
+Keep the tone professional but engaging.`;
+
+  if (canAddActions) {
+    systemPrompt += `\n\nYou may also add actions to unlocked steps when appropriate.
+Return a JSON array of objects: [{"text": "...", "actions": [...]}, ...]
+Each action object must use EXACTLY one of these available actions (by id):
+${aiAvailableActions.map(a => `  - id: "${a.id}" → ${a.label} (type: ${a.type}${a.graphicId ? ', graphicId: "'+a.graphicId+'"' : ''}${a.path ? ', path: "'+a.path+'"' : ''}${a.obsAction ? ', obsAction: "'+a.obsAction+'"' : ''})`).join('\n')}
+
+Action format: {"type": "<type>", "graphicId": "<id>", "path": "<path>", "value": "<value>", "obsAction": "<obsAction>", "obsValue": "<value>", "duration": <seconds>}
+Only include fields relevant to the action type. Only add actions when they genuinely enhance the broadcast.
+For steps where no actions are needed, use an empty array.
+For locked steps, return {"text": "<exact locked text>", "actions": []}.`;
+  } else {
+    systemPrompt += `\nReturn ONLY a JSON array of strings, one per step. Example: ["Text for step 1", "Text for step 2"]`;
+  }
+
+  let userPrompt = `Generate teleprompter script text for a broadcast segment called "${formatName || 'Untitled'}".
+
+`;
+  if (globalNotes) userPrompt += `Overall context/notes: ${globalNotes}\n\n`;
+  if (globalMedia && globalMedia.length) userPrompt += `Reference media files: ${globalMedia.join(', ')}\n\n`;
+
+  userPrompt += `Steps:\n`;
+  steps.forEach((s, i) => {
+    userPrompt += `\n--- Step ${i + 1}: ${s.label || 'Untitled'} ---\n`;
+    if (s.locked) {
+      userPrompt += `[LOCKED - return this exact text]: "${s.text}"\n`;
+    } else {
+      if (s.defaultText) userPrompt += `Template text: "${s.defaultText}"\n`;
+      if (s.notes) userPrompt += `Notes: ${s.notes}\n`;
+      if (s.media && s.media.length) userPrompt += `Media references: ${s.media.join(', ')}\n`;
+      if (s.actions && s.actions.length) {
+        const actionDesc = s.actions.map(a => {
+          if (a.type === 'show') return `Show graphic`;
+          if (a.type === 'hide') return `Hide graphic`;
+          if (a.type === 'wait') return `Wait ${a.duration}s`;
+          if (a.type === 'obs') return `OBS: ${a.obsAction}`;
+          if (a.type === 'update') return `Update graphic`;
+          return '';
+        }).filter(Boolean).join(', ');
+        userPrompt += `Existing actions: ${actionDesc}\n`;
+      }
+    }
+  });
+
+  if (canAddActions) {
+    userPrompt += `\nReturn a JSON array of ${steps.length} objects: [{"text": "...", "actions": [...]}, ...]`;
+  } else {
+    userPrompt += `\nReturn a JSON array of ${steps.length} strings.`;
+  }
+
+  try {
+    const model = settings.aiModel || 'claude-opus-4-6';
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+    const text = data.content?.[0]?.text || '';
+    // Extract JSON array from response
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return res.status(500).json({ error: 'Could not parse AI response', raw: text });
+    const generated = JSON.parse(match[0]);
+    res.json({ steps: generated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Folder picker (macOS/Linux) ─────────────────────────────────────────────
+app.post('/api/pick-folder', async (req, res) => {
+  const { execSync } = require('child_process');
+  try {
+    let folder;
+    if (process.platform === 'darwin') {
+      folder = execSync(
+        `osascript -e 'POSIX path of (choose folder with prompt "Select working directory")'`,
+        { encoding: 'utf-8', timeout: 60000 }
+      ).trim();
+    } else {
+      // Linux with zenity
+      folder = execSync(
+        `zenity --file-selection --directory --title="Select working directory"`,
+        { encoding: 'utf-8', timeout: 60000 }
+      ).trim();
+    }
+    if (folder) return res.json({ path: folder });
+    res.json({ path: '' });
+  } catch (e) {
+    res.json({ path: '', cancelled: true });
+  }
+});
+
 // ─── File upload ────────────────────────────────────────────────────────────
 app.post('/api/upload',
   express.raw({ type: 'image/*', limit: '20mb' }),
@@ -487,15 +614,22 @@ io.on('connection', (socket) => {
   socket.on('script:execute', async ({ projectId, actions }) => {
     const project = loadProject(projectId);
     if (!project) return;
-    for (const action of actions) {
-      // OBS actions
+
+    async function runAction(action) {
+      // Wait
+      if (action.type === 'wait') {
+        const ms = Math.max(0, (action.duration || 1)) * 1000;
+        await new Promise(resolve => setTimeout(resolve, ms));
+        return;
+      }
+      // OBS
       if (action.type === 'obs') {
         await executeOBSAction(action);
-        continue;
+        return;
       }
       // Graphic actions
       const g = project.graphics.find(g => g.id === action.graphicId);
-      if (!g) continue;
+      if (!g) return;
       switch (action.type) {
         case 'show':
           g.isLive = true; g.isCued = false;
@@ -515,6 +649,11 @@ io.on('connection', (socket) => {
           io.to(projectId).emit('graphic:update', g);
           break;
       }
+    }
+
+    // Execute sequentially so waits pause between actions
+    for (const action of actions) {
+      await runAction(action);
     }
     saveProject(project);
     io.to(projectId).emit('project:update', project);

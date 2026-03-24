@@ -35,6 +35,7 @@
 <body>
   <header class="app-header">
     <h1><span class="logo">B</span> My Broadcast</h1>
+    <button onclick="toggleThemeMode()" id="themeToggle" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;font-size:13px;border-radius:6px;cursor:pointer">🌙</button>
   </header>
 
   <div class="launcher-wrap">
@@ -100,6 +101,20 @@
     }
 
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function toggleThemeMode() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      document.getElementById('themeToggle').textContent = next === 'dark' ? '🌙' : '☀️';
+      localStorage.setItem('theme', next);
+    }
+    (function() {
+      const saved = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      const btn = document.getElementById('themeToggle');
+      if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀️';
+    })();
 
     loadProjects();
   </script>
