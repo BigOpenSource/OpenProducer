@@ -477,15 +477,19 @@
           `);
           break;
 
-        case 'timer':
+        case 'timer': {
+          const initSec = g.content.mode === 'countup' ? 0
+            : g.content.mode === 'clock' ? (() => { const n = new Date(); return n.getHours()*3600+n.getMinutes()*60+n.getSeconds(); })()
+            : (g.content.duration || 300);
+          const initDisplay = formatTime(initSec, g.content.format || 'mm:ss');
           el = createElement('div', `timer-graphic graphic-show`, `
             <div class="timer-bg">
               <div class="timer-label">${esc(replaceVars(g.content.label))}</div>
-              <div class="timer-display" id="timer-${g.id}">00:00</div>
+              <div class="timer-display" id="timer-${g.id}">${initDisplay}</div>
             </div>
           `);
-          initTimer(g);
           break;
+        }
 
         case 'score':
           el = createElement('div', `score-graphic graphic-show`, `
@@ -508,6 +512,9 @@
       el.dataset.graphicId = g.id;
       container.appendChild(el);
       liveGraphics.set(g.id, el);
+
+      // Init timer after element is in the DOM so renderTimer can find it
+      if (g.type === 'timer') initTimer(g);
     }
 
     // ─── Hide graphic ──────────────────────────────────────────────────────

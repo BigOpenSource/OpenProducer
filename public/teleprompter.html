@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teleprompter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --surface: #141420;
+      --border: #2e2e44;
+      --text: #e8e8f0;
+      --text-dim: #666680;
+      --accent: #6c5ce7;
+      --red: #e63946;
+      --green: #2ecc71;
+      --yellow: #f1c40f;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .tp-header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .tp-header h1 { font-size: 16px; font-weight: 700; flex: 1; }
+    .tp-header .tp-progress {
+      font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+    }
+    .tp-header button {
+      padding: 6px 14px; font-size: 13px; font-weight: 600;
+      border: none; border-radius: 6px; cursor: pointer;
+      font-family: inherit;
+    }
+    .tp-header .btn-reset { background: var(--border); color: var(--text); }
+    .tp-header .btn-reset:hover { background: #444; }
+    .tp-font-controls { display: flex; align-items: center; gap: 4px; }
+    .tp-font-controls button {
+      width: 28px; height: 28px; padding: 0; font-size: 16px;
+      background: var(--border); color: var(--text); border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tp-font-controls span { font-size: 12px; color: var(--text-dim); min-width: 36px; text-align: center; }
+
+    .tp-body { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+    .tp-step {
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .tp-step.current {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(108, 92, 231, 0.2);
+    }
+    .tp-step.done { opacity: 0.35; }
+
+    .tp-step-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .tp-step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+      background: var(--border); color: var(--text-dim);
+    }
+    .tp-step.current .tp-step-num { background: var(--accent); color: #fff; }
+    .tp-step.done .tp-step-num { background: var(--green); color: #fff; }
+    .tp-step-label { font-size: 12px; color: var(--text-dim); flex: 1; }
+    .tp-step.current .tp-step-label { color: var(--accent); font-weight: 600; }
+
+    .tp-step-actions {
+      display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .tp-action-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 4px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .tp-action-badge.show { background: rgba(46,204,113,0.15); color: var(--green); }
+    .tp-action-badge.hide { background: rgba(230,57,70,0.15); color: var(--red); }
+    .tp-action-badge.update { background: rgba(108,92,231,0.15); color: var(--accent); }
+    .tp-action-badge.obs { background: rgba(241,196,15,0.15); color: var(--yellow); }
+
+    .tp-step-text {
+      padding: 20px 24px;
+      font-size: 28px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .tp-step.current .tp-step-text { color: #fff; }
+    .tp-step.done .tp-step-text { color: var(--text-dim); }
+
+    .tp-step-footer {
+      padding: 10px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .tp-step-footer .tp-step-actions { flex: 1; }
+    .tp-cue-btn {
+      padding: 10px 28px; font-size: 15px; font-weight: 700;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; cursor: pointer; font-family: inherit;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .tp-cue-btn:hover { background: #7f70f0; }
+    .tp-cue-btn:active { transform: scale(0.97); }
+    .tp-cue-btn.fired {
+      background: var(--green); cursor: default;
+    }
+
+    .tp-end {
+      text-align: center; padding: 60px 20px; color: var(--text-dim);
+      font-size: 18px;
+    }
+
+    /* Keyboard hint */
+    .tp-hint {
+      position: fixed; bottom: 16px; right: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 12px;
+      color: var(--text-dim);
+    }
+    .tp-hint kbd {
+      background: var(--border); padding: 2px 6px; border-radius: 3px;
+      font-family: inherit; font-size: 11px; color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="tp-header">
+    <h1 id="scriptName">Script</h1>
+    <div class="tp-font-controls">
+      <button onclick="changeFontSize(-4)">A-</button>
+      <span id="fontSizeLabel">28px</span>
+      <button onclick="changeFontSize(4)">A+</button>
+    </div>
+    <span class="tp-progress" id="progress">0 / 0</span>
+    <button class="btn-reset" onclick="resetScript()">Reset</button>
+  </div>
+  <div class="tp-body" id="tpBody"></div>
+  <div class="tp-hint"><kbd>Space</kbd> or <kbd>Enter</kbd> to fire cue &amp; advance</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const pathParts = window.location.pathname.split('/');
+    const PROJECT_ID = pathParts[2];
+    const SCRIPT_ID = pathParts[3];
+    const socket = io();
+    let project = null;
+    let script = null;
+    let currentStep = 0;
+    let firedSteps = new Set();
+    let fontSize = 28;
+
+    socket.emit('join', PROJECT_ID);
+
+    socket.on('project:update', (p) => {
+      project = p;
+      if (!project.scripts) project.scripts = [];
+      script = project.scripts.find(s => s.id === SCRIPT_ID);
+      if (script) {
+        document.getElementById('scriptName').textContent = script.name;
+        renderTeleprompter();
+      }
+    });
+
+    function renderTeleprompter() {
+      if (!script) return;
+      const body = document.getElementById('tpBody');
+      document.getElementById('progress').textContent =
+        `${Math.min(currentStep + 1, script.steps.length)} / ${script.steps.length}`;
+
+      body.innerHTML = script.steps.map((step, i) => {
+        const state = i < currentStep ? 'done' : i === currentStep ? 'current' : '';
+        const fired = firedSteps.has(i);
+        const actionBadges = step.actions.map(a => {
+          if (a.type === 'obs') {
+            const obsLabels = {
+              switch_scene: 'Scene', start_stream: 'Start Stream', stop_stream: 'Stop Stream',
+              toggle_stream: 'Toggle Stream', start_record: 'Start Rec', stop_record: 'Stop Rec',
+              toggle_record: 'Toggle Rec', mute: 'Mute', unmute: 'Unmute', toggle_mute: 'Toggle Mute'
+            };
+            const label = `OBS: ${obsLabels[a.obsAction] || a.obsAction}${a.obsValue ? ': ' + a.obsValue : ''}`;
+            return `<span class="tp-action-badge obs">${esc(label)}</span>`;
+          }
+          const g = project.graphics.find(g => g.id === a.graphicId);
+          const name = g ? g.name : '?';
+          let label = '';
+          if (a.type === 'show') label = `Show: ${name}`;
+          else if (a.type === 'hide') label = `Hide: ${name}`;
+          else if (a.type === 'update') label = `${name}.${a.path} = ${a.value}`;
+          return `<span class="tp-action-badge ${a.type}">${esc(label)}</span>`;
+        }).join('');
+
+        return `<div class="tp-step ${state}" id="step-${i}">
+          <div class="tp-step-header">
+            <div class="tp-step-num">${fired ? '✓' : i + 1}</div>
+            <span class="tp-step-label">Step ${i + 1}</span>
+          </div>
+          ${step.text ? `<div class="tp-step-text" style="font-size:${fontSize}px">${esc(step.text)}</div>` : ''}
+          ${i === currentStep && step.actions.length > 0 ? `
+            <div class="tp-step-footer">
+              <div class="tp-step-actions">${actionBadges}</div>
+              <button class="tp-cue-btn ${fired ? 'fired' : ''}"
+                      onclick="${fired ? '' : `fireCue(${i})`}"
+                      id="cue-${i}">
+                ${fired ? '✓ Fired' : '▶ Fire Cue'}
+              </button>
+            </div>
+          ` : ''}
+        </div>`;
+      }).join('') + '<div class="tp-end">End of script</div>';
+
+      // Scroll current step into view
+      const currentEl = document.getElementById(`step-${currentStep}`);
+      if (currentEl) {
+        currentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function fireCue(stepIdx) {
+      const step = script.steps[stepIdx];
+      if (!step || firedSteps.has(stepIdx)) return;
+
+      // Execute actions
+      if (step.actions.length > 0) {
+        socket.emit('script:execute', {
+          projectId: PROJECT_ID,
+          actions: step.actions
+        });
+      }
+
+      firedSteps.add(stepIdx);
+      renderTeleprompter();
+    }
+
+    function advance() {
+      const step = script.steps[currentStep];
+      // If current step has unfired actions, fire them first
+      if (step && step.actions.length > 0 && !firedSteps.has(currentStep)) {
+        fireCue(currentStep);
+        return;
+      }
+      // Move to next step
+      if (currentStep < script.steps.length - 1) {
+        currentStep++;
+        renderTeleprompter();
+      }
+    }
+
+    function resetScript() {
+      currentStep = 0;
+      firedSteps.clear();
+      renderTeleprompter();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function changeFontSize(delta) {
+      fontSize = Math.max(16, Math.min(72, fontSize + delta));
+      document.getElementById('fontSizeLabel').textContent = fontSize + 'px';
+      document.querySelectorAll('.tp-step-text').forEach(el => el.style.fontSize = fontSize + 'px');
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        advance();
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        if (currentStep < script.steps.length - 1) { currentStep++; renderTeleprompter(); }
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        if (currentStep > 0) { currentStep--; renderTeleprompter(); }
+      }
+    });
+
+    function esc(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teleprompter — Flow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --surface: #141420;
+      --border: #2e2e44;
+      --text: #e8e8f0;
+      --text-dim: #444460;
+      --text-read: #666680;
+      --accent: #6c5ce7;
+      --red: #e63946;
+      --green: #2ecc71;
+      --yellow: #f1c40f;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text-dim);
+      min-height: 100vh;
+    }
+
+    /* ─── Header ──────── */
+    .tp-header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .tp-header h1 { font-size: 16px; font-weight: 700; color: var(--text); flex: 1; }
+    .tp-header .tp-progress {
+      font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+    }
+    .tp-header button {
+      padding: 6px 14px; font-size: 13px; font-weight: 600;
+      border: none; border-radius: 6px; cursor: pointer;
+      font-family: inherit;
+    }
+    .tp-header .btn-reset { background: var(--border); color: var(--text); }
+    .tp-header .btn-reset:hover { background: #444; }
+    .tp-font-controls { display: flex; align-items: center; gap: 4px; }
+    .tp-font-controls button {
+      width: 28px; height: 28px; padding: 0; font-size: 16px;
+      background: var(--border); color: var(--text); border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tp-font-controls span {
+      font-size: 12px; color: var(--text-dim); min-width: 36px; text-align: center;
+    }
+
+    /* ─── Flow body ──────── */
+    .flow-body {
+      max-width: 800px; margin: 0 auto;
+      padding: 40px 30px 200px 60px;
+    }
+
+    /* ─── Step marker ──────── */
+    .flow-marker {
+      display: flex; align-items: center; gap: 10px;
+      margin: 28px 0 10px; position: relative;
+    }
+    .flow-marker:first-child { margin-top: 0; }
+    .flow-marker .marker-num {
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+      background: var(--border); color: var(--text-dim);
+      transition: background 0.3s, color 0.3s;
+    }
+    .flow-marker.done .marker-num { background: var(--green); color: #fff; }
+    .flow-marker.current .marker-num { background: var(--accent); color: #fff; }
+    .flow-marker .marker-line {
+      flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ─── Pointer triangle (on text) ──────── */
+    .flow-pointer {
+      position: absolute;
+      left: -6px; top: 0;
+      width: 0; height: 0;
+      border-top: 12px solid transparent;
+      border-bottom: 12px solid transparent;
+      border-left: 16px solid var(--accent);
+      opacity: 0; transition: opacity 0.3s;
+      filter: drop-shadow(0 0 6px rgba(108,92,231,0.5));
+    }
+    .flow-text-wrap.current .flow-pointer { opacity: 1; }
+
+    /* ─── Text block ──────── */
+    .flow-text-wrap {
+      position: relative;
+      padding-left: 36px;
+    }
+    .flow-text {
+      font-size: 32px; line-height: 1.6;
+      white-space: pre-wrap; word-wrap: break-word;
+      transition: color 0.3s;
+    }
+    .flow-text-wrap.done .flow-text { color: var(--text-dim); }
+    .flow-text-wrap.current .flow-text { color: #fff; }
+    .flow-text-wrap.upcoming .flow-text { color: var(--text-dim); }
+
+    /* ─── Cue bar (inline) ──────── */
+    .flow-cue {
+      display: flex; align-items: center; gap: 8px;
+      margin: 8px 0 4px; padding: 8px 12px;
+      margin-left: 36px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: border-color 0.3s, opacity 0.3s;
+    }
+    .flow-cue.current { border-color: var(--accent); }
+    .flow-cue.done { opacity: 0.35; }
+    .flow-cue .cue-badges {
+      display: flex; flex-wrap: wrap; gap: 4px; flex: 1;
+    }
+    .flow-cue .cue-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 4px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .cue-badge.show { background: rgba(46,204,113,0.15); color: var(--green); }
+    .cue-badge.hide { background: rgba(230,57,70,0.15); color: var(--red); }
+    .cue-badge.update { background: rgba(108,92,231,0.15); color: var(--accent); }
+    .cue-badge.obs { background: rgba(241,196,15,0.15); color: var(--yellow); }
+
+    .flow-fire-btn {
+      padding: 6px 20px; font-size: 13px; font-weight: 700;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-family: inherit;
+      white-space: nowrap; flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .flow-fire-btn:hover { background: #7f70f0; }
+    .flow-fire-btn:active { transform: scale(0.97); }
+    .flow-fire-btn.fired { background: var(--green); cursor: default; }
+
+    /* Pointer on cue bar */
+    .flow-cue { position: relative; }
+    .flow-cue .flow-pointer {
+      left: -6px; top: 50%; transform: translateY(-50%);
+    }
+    .flow-cue.pointing .flow-pointer { opacity: 1; }
+
+    /* Fired flash */
+    .flow-cue.just-fired {
+      border-color: var(--green);
+      background: rgba(46,204,113,0.08);
+    }
+
+    .flow-end {
+      text-align: center; padding: 60px 20px; color: var(--text-dim);
+      font-size: 18px; margin-left: 36px;
+    }
+
+    /* ─── Keyboard hint ──────── */
+    .tp-hint {
+      position: fixed; bottom: 16px; right: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 12px;
+      color: var(--text-dim);
+    }
+    .tp-hint kbd {
+      background: var(--border); padding: 2px 6px; border-radius: 3px;
+      font-family: inherit; font-size: 11px; color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="tp-header">
+    <h1 id="scriptName">Script</h1>
+    <div class="tp-font-controls">
+      <button onclick="changeFontSize(-4)">A-</button>
+      <span id="fontSizeLabel">32px</span>
+      <button onclick="changeFontSize(4)">A+</button>
+    </div>
+    <span class="tp-progress" id="progress">0 / 0</span>
+    <button class="btn-reset" onclick="resetScript()">Reset</button>
+  </div>
+  <div class="flow-body" id="flowBody"></div>
+  <div class="tp-hint"><kbd>Space</kbd> or <kbd>Enter</kbd> to fire cue &amp; advance</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const pathParts = window.location.pathname.split('/');
+    const PROJECT_ID = pathParts[2];
+    const SCRIPT_ID = pathParts[3];
+    const socket = io();
+    let project = null;
+    let script = null;
+    let currentStep = 0;
+    // subStep: 'text' = pointer on text, 'cue' = pointer on cue bar, 'fired' = just fired
+    let subStep = 'text';
+    let firedSteps = new Set();
+    let fontSize = 32;
+
+    socket.emit('join', PROJECT_ID);
+
+    socket.on('project:update', (p) => {
+      project = p;
+      if (!project.scripts) project.scripts = [];
+      script = project.scripts.find(s => s.id === SCRIPT_ID);
+      if (script) {
+        document.getElementById('scriptName').textContent = script.name;
+        renderFlow();
+      }
+    });
+
+    function badgeHTML(a) {
+      if (a.type === 'obs') {
+        const obsLabels = {
+          switch_scene: 'Scene', start_stream: 'Start Stream', stop_stream: 'Stop Stream',
+          toggle_stream: 'Toggle Stream', start_record: 'Start Rec', stop_record: 'Stop Rec',
+          toggle_record: 'Toggle Rec', mute: 'Mute', unmute: 'Unmute', toggle_mute: 'Toggle Mute'
+        };
+        const label = `OBS: ${obsLabels[a.obsAction] || a.obsAction}${a.obsValue ? ': ' + a.obsValue : ''}`;
+        return `<span class="cue-badge obs">${esc(label)}</span>`;
+      }
+      const g = project.graphics.find(g => g.id === a.graphicId);
+      const name = g ? g.name : '?';
+      let label = '';
+      if (a.type === 'show') label = `Show: ${name}`;
+      else if (a.type === 'hide') label = `Hide: ${name}`;
+      else if (a.type === 'update') label = `${name}.${a.path} = ${a.value}`;
+      return `<span class="cue-badge ${a.type}">${esc(label)}</span>`;
+    }
+
+    function renderFlow() {
+      if (!script) return;
+      const body = document.getElementById('flowBody');
+      document.getElementById('progress').textContent =
+        `${Math.min(currentStep + 1, script.steps.length)} / ${script.steps.length}`;
+
+      const step = script.steps[currentStep];
+      const hasActions = step && step.actions.length > 0;
+
+      let html = '';
+      script.steps.forEach((step, i) => {
+        const state = i < currentStep ? 'done' : i === currentStep ? 'current' : 'upcoming';
+        const fired = firedSteps.has(i);
+        const isCurrent = i === currentStep;
+        const pointerOnText = isCurrent && subStep === 'text';
+        const pointerOnCue = isCurrent && subStep === 'cue';
+        const justFired = isCurrent && subStep === 'fired';
+
+        // Step marker
+        html += `<div class="flow-marker ${state}" id="step-${i}">
+          <div class="marker-num">${fired ? '✓' : i + 1}</div>
+          <div class="marker-line"></div>
+        </div>`;
+
+        // Text with pointer
+        if (step.text) {
+          html += `<div class="flow-text-wrap ${state} ${pointerOnText ? 'current' : ''}">
+            ${pointerOnText ? '<div class="flow-pointer"></div>' : ''}
+            <div class="flow-text" style="font-size:${fontSize}px">${esc(step.text)}</div>
+          </div>`;
+        }
+
+        // Cue bar
+        if (step.actions.length > 0) {
+          const badges = step.actions.map(badgeHTML).join('');
+          html += `<div class="flow-cue ${state} ${pointerOnCue ? 'pointing' : ''} ${justFired ? 'just-fired' : ''}" id="cue-${i}">
+            ${pointerOnCue ? '<div class="flow-pointer"></div>' : ''}
+            <div class="cue-badges">${badges}</div>
+            ${isCurrent ? `
+              <button class="flow-fire-btn ${fired || justFired ? 'fired' : ''}"
+                      onclick="${fired || justFired ? '' : `fireCue(${i})`}">
+                ${fired || justFired ? '✓ Fired' : '▶ Fire'}
+              </button>
+            ` : ''}
+          </div>`;
+        }
+      });
+
+      html += '<div class="flow-end">— End of script —</div>';
+      body.innerHTML = html;
+
+      // Scroll the active element into view
+      let scrollTarget;
+      if (subStep === 'cue' || subStep === 'fired') {
+        scrollTarget = document.getElementById(`cue-${currentStep}`);
+      }
+      if (!scrollTarget) scrollTarget = document.getElementById(`step-${currentStep}`);
+      if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function fireCue(stepIdx) {
+      const step = script.steps[stepIdx];
+      if (!step || firedSteps.has(stepIdx)) return;
+      if (step.actions.length > 0) {
+        socket.emit('script:execute', {
+          projectId: PROJECT_ID,
+          actions: step.actions
+        });
+      }
+      firedSteps.add(stepIdx);
+      subStep = 'fired';
+      renderFlow();
+    }
+
+    function advance() {
+      const step = script.steps[currentStep];
+      if (!step) return;
+      const hasActions = step.actions.length > 0;
+
+      if (subStep === 'text' && hasActions) {
+        // Move pointer down to cue bar
+        subStep = 'cue';
+        renderFlow();
+      } else if (subStep === 'cue') {
+        // Fire the cue
+        fireCue(currentStep);
+      } else {
+        // 'fired' or 'text' with no actions → advance to next step
+        if (currentStep < script.steps.length - 1) {
+          currentStep++;
+          subStep = 'text';
+          renderFlow();
+        }
+      }
+    }
+
+    function resetScript() {
+      currentStep = 0;
+      subStep = 'text';
+      firedSteps.clear();
+      renderFlow();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function changeFontSize(delta) {
+      fontSize = Math.max(16, Math.min(72, fontSize + delta));
+      document.getElementById('fontSizeLabel').textContent = fontSize + 'px';
+      document.querySelectorAll('.flow-text').forEach(el => el.style.fontSize = fontSize + 'px');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        advance();
+      } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        if (currentStep < script.steps.length - 1) { currentStep++; subStep = 'text'; renderFlow(); }
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        if (currentStep > 0) { currentStep--; subStep = 'text'; renderFlow(); }
+      }
+    });
+
+    function esc(s) {
+      if (s == null) return '';
+      const d = document.createElement('div');
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.21.0",
+    "obs-websocket-js": "^5.0.8",
     "socket.io": "^4.7.5",
     "uuid": "^10.0.0"
   }

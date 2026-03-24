@@ -137,6 +137,30 @@
       font-size: 13px;
     }
     .gcard-body .fg { display: flex; flex-direction: column; gap: 3px; }
+
+    /* Image library */
+    .img-library {
+      display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 0;
+    }
+    .img-thumb {
+      position: relative; width: 56px; height: 56px; border-radius: 6px;
+      overflow: hidden; cursor: pointer;
+      border: 2px solid var(--border); transition: border-color var(--transition);
+    }
+    .img-thumb:hover { border-color: #666; }
+    .img-thumb.img-active { border-color: var(--accent); }
+    .img-thumb img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .img-remove {
+      position: absolute; top: 1px; right: 1px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: rgba(0,0,0,0.7); color: #fff; border: none;
+      font-size: 9px; padding: 0; cursor: pointer;
+      display: none; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    .img-thumb:hover .img-remove { display: flex; }
     .gcard-body .fg label {
       font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
       color: var(--text-dim); font-weight: 500;
@@ -207,6 +231,77 @@
       cursor: pointer;
     }
 
+    /* ─── Scripts ──────── */
+    .script-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .script-header {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      background: var(--surface2); border-bottom: 1px solid var(--border); cursor: pointer;
+    }
+    .script-header .script-name { flex: 1; font-weight: 700; font-size: 14px; }
+    .script-header button { padding: 4px 10px; font-size: 11px; }
+    .script-body { padding: 12px 14px; }
+    .script-steps { display: flex; flex-direction: column; gap: 8px; }
+    .step-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .step-card .step-header {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .step-card .step-num {
+      width: 24px; height: 24px; border-radius: 50%; background: var(--accent);
+      color: #fff; font-size: 11px; font-weight: 700; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-card textarea {
+      width: 100%; font-size: 13px; padding: 8px 10px; min-height: 50px;
+      background: var(--surface); border: 1.5px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: inherit; resize: vertical;
+    }
+    .step-card textarea:focus { border-color: var(--accent); }
+    .step-actions { display: flex; flex-direction: column; gap: 4px; }
+    .step-action {
+      display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      font-size: 12px;
+    }
+    .step-action select, .step-action input {
+      font-size: 12px; padding: 3px 6px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 4px; color: var(--text);
+    }
+    .step-action select { min-width: 80px; }
+    .step-action .action-target { flex: 1; min-width: 0; }
+    .step-action .action-remove { cursor: pointer; color: #666; background: none; border: none; font-size: 14px; padding: 0 4px; }
+    .step-action .action-remove:hover { color: var(--red); }
+    .step-btns { display: flex; gap: 4px; }
+    .step-btns button { font-size: 11px; padding: 3px 8px; }
+    .add-step-btn {
+      width: 100%; padding: 8px; margin-top: 8px; font-size: 12px;
+      background: var(--surface); border: 1.5px dashed var(--border);
+      border-radius: 8px; color: var(--text-dim); cursor: pointer;
+    }
+    .add-step-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ─── OBS ──────── */
+    .obs-section { padding: 10px 12px; border-top: 1px solid var(--border); }
+    .obs-section h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 6px; }
+    .obs-status {
+      display: flex; align-items: center; gap: 6px; font-size: 11px;
+      margin-bottom: 6px;
+    }
+    .obs-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .obs-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .obs-dot.off { background: #555; }
+    .obs-connect-form input {
+      width: 100%; font-size: 11px; padding: 4px 8px; margin-bottom: 4px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text);
+    }
+    .obs-connect-form button { width: 100%; font-size: 11px; padding: 5px; }
+    .step-action.obs-action { border-color: #2a4a2a; background: rgba(46,204,113,0.05); }
+
     /* ─── Drag & drop ──────── */
     .gcard.dragging { opacity: 0.3; }
     .gcard.drag-over { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -225,6 +320,7 @@
 
   <div class="tabs" id="mainTabs">
     <button class="tab active" data-tab="rundown">Rundown</button>
+    <button class="tab" data-tab="scripts">Scripts</button>
     <button class="tab" data-tab="variables">Variables</button>
     <button class="tab" data-tab="theme">Theme</button>
   </div>
@@ -240,6 +336,18 @@
         <button class="graphic-type-btn" onclick="addGraphic('timer')"><span class="icon">⏱</span> Timer</button>
         <button class="graphic-type-btn" onclick="addGraphic('score')"><span class="icon">⚽</span> Scoreboard</button>
       </div>
+      <div class="obs-section" id="obsSection">
+        <h3>OBS Studio</h3>
+        <div class="obs-status">
+          <div class="obs-dot" id="obsDot"></div>
+          <span id="obsLabel">Disconnected</span>
+        </div>
+        <div class="obs-connect-form">
+          <input type="text" id="obsUrl" placeholder="ws://localhost:4455" value="ws://localhost:4455">
+          <input type="password" id="obsPassword" placeholder="Password (optional)">
+          <button class="btn-ghost" onclick="connectOBS()" id="obsConnectBtn">Connect</button>
+        </div>
+      </div>
     </div>
 
     <!-- Tab: Rundown -->
@@ -254,6 +362,15 @@
         </div>
       </div>
       <div class="rundown-grid" id="rundownGrid"></div>
+    </div>
+
+    <!-- Tab: Scripts -->
+    <div class="tab-content" id="tab-scripts">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>Scripts</h3>
+        <button class="btn-primary" onclick="addScript()" style="font-size:12px;padding:5px 12px">+ New Script</button>
+      </div>
+      <div id="scriptsContainer"></div>
     </div>
 
     <!-- Tab: Variables -->
@@ -314,24 +431,34 @@
     let isLocked = false;
 
     socket.emit('join', PROJECT_ID);
+
+    // OBS status
+    socket.on('obs:status', (s) => {
+      const dot = document.getElementById('obsDot');
+      const label = document.getElementById('obsLabel');
+      const btn = document.getElementById('obsConnectBtn');
+      if (dot) dot.className = 'obs-dot ' + (s.connected ? 'on' : 'off');
+      if (label) label.textContent = s.connected ? 'Connected' : (s.error || 'Disconnected');
+      if (btn) btn.textContent = s.connected ? 'Disconnect' : 'Connect';
+    });
+
     socket.on('project:update', (p) => {
       const focused = document.activeElement;
-      const focusInfo = focused && focused.dataset.field ? {
-        graphicId: focused.dataset.gid,
-        field: focused.dataset.field,
-        selStart: focused.selectionStart,
-        selEnd: focused.selectionEnd
-      } : null;
+      const isEditingRundown = focused && focused.dataset.field &&
+        focused.closest('.rundown-grid');
 
       project = p;
-      render();
 
-      if (focusInfo) {
-        const el = document.querySelector(`[data-gid="${focusInfo.graphicId}"][data-field="${focusInfo.field}"]`);
-        if (el) {
-          el.focus();
-          try { el.setSelectionRange(focusInfo.selStart, focusInfo.selEnd); } catch(e) {}
-        }
+      // If the user is actively editing a field in the rundown,
+      // only update variables/theme — skip re-rendering the rundown
+      // to avoid destroying the focused input and losing cursor position
+      if (isEditingRundown) {
+        document.getElementById('projectName').textContent = project.name;
+        document.getElementById('projectId').textContent = project.id;
+        renderVariables();
+        renderTheme();
+      } else {
+        render();
       }
     });
 
@@ -342,7 +469,7 @@
         tab.classList.add('active');
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-        document.getElementById('sidebar').style.display = tab.dataset.tab === 'rundown' ? '' : 'none';
+        document.getElementById('sidebar').style.display = (tab.dataset.tab === 'rundown') ? '' : 'none';
       });
     });
 
@@ -353,6 +480,7 @@
       document.getElementById('projectId').textContent = project.id;
       renderRundown();
       renderVariables();
+      renderScripts();
       renderTheme();
     }
 
@@ -430,17 +558,28 @@
               <input type="number" value="${g.content.speed}" data-gid="${id}" data-field="speed"
                      oninput="uc('${id}','speed',+this.value)"></div>`;
 
-        case 'image':
+        case 'image': {
+          const lib = g.content.library || [];
           return `
-            <div class="fg"><label>Image URL</label>
-              <input type="text" value="${esc(g.content.url)}" data-gid="${id}" data-field="url"
-                     oninput="uc('${id}','url',this.value)"></div>
+            <div class="fg"><label>Image</label>
+              <div class="row" style="gap:6px">
+                <input type="text" value="${esc(g.content.url)}" data-gid="${id}" data-field="url"
+                       oninput="uc('${id}','url',this.value)" placeholder="URL or upload..." style="flex:1">
+                <button class="btn-ghost" style="white-space:nowrap;padding:4px 10px;font-size:12px" onclick="pickImage('${id}')">Upload</button>
+              </div></div>
+            ${lib.length ? `<div class="img-library">${lib.map(u =>
+              `<div class="img-thumb ${u === g.content.url ? 'img-active' : ''}" onclick="selectImage('${id}','${esc(u)}')">
+                <img src="${esc(u)}">
+                <button class="img-remove" onclick="event.stopPropagation(); removeImage('${id}','${esc(u)}')" title="Remove">✕</button>
+              </div>`
+            ).join('')}</div>` : ''}
             <div class="fg"><label>Sizing</label>
               <select data-gid="${id}" data-field="sizing"
                       onchange="uc('${id}','sizing',this.value)">
                 <option value="contain" ${g.content.sizing==='contain'?'selected':''}>Contain</option>
                 <option value="cover" ${g.content.sizing==='cover'?'selected':''}>Cover</option>
               </select></div>`;
+        }
 
         case 'timer':
           return `
@@ -582,6 +721,35 @@
       const g = project.graphics.find(g => g.id === id);
       if (g) { g.cardColor = color; save(); }
     }
+    function pickImage(id) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = async () => {
+        const g = project.graphics.find(g => g.id === id);
+        if (!g || !input.files.length) return;
+        if (!g.content.library) g.content.library = [];
+        for (const file of input.files) {
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+          const { url } = await res.json();
+          g.content.library.push(url);
+          if (!g.content.url) g.content.url = url;
+        }
+        save();
+      };
+      input.click();
+    }
+    function selectImage(id, url) {
+      uc(id, 'url', url);
+    }
+    function removeImage(id, url) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      g.content.library = (g.content.library || []).filter(u => u !== url);
+      if (g.content.url === url) g.content.url = g.content.library[0] || '';
+      save();
+    }
     // uc = update content, usf = update score field, adj = adjust score
     function uc(id, key, value) {
       const g = project.graphics.find(g => g.id === id);
@@ -594,6 +762,225 @@
     function adj(id, team, delta) {
       const g = project.graphics.find(g => g.id === id);
       if (g) { g.content[team].score += delta; save(); }
+    }
+
+    // ─── Scripts ───────────────────────────────────────────────────────────
+    function renderScripts() {
+      if (!project) return;
+      if (!project.scripts) project.scripts = [];
+      const c = document.getElementById('scriptsContainer');
+      if (!c) return;
+      if (project.scripts.length === 0) {
+        c.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:40px">No scripts yet. Create one to plan your show.</div>';
+        return;
+      }
+      c.innerHTML = project.scripts.map((s, si) => `
+        <div class="script-card">
+          <div class="script-header" onclick="toggleScript(${si})">
+            <span style="font-size:18px">📋</span>
+            <span class="script-name">${esc(s.name)}</span>
+            <button class="btn-ghost" onclick="event.stopPropagation(); openTeleprompter('${s.id}')" title="Card-style teleprompter">📺 Cards</button>
+            <button class="btn-ghost" onclick="event.stopPropagation(); openTeleprompterFlow('${s.id}')" title="Flow-style teleprompter">📜 Flow</button>
+            <button class="btn-ghost" onclick="event.stopPropagation(); renameScript(${si})" title="Rename">✎</button>
+            <button class="btn-ghost" onclick="event.stopPropagation(); deleteScript(${si})" title="Delete" style="color:#666">✕</button>
+          </div>
+          ${expandedScriptIdx === si ? renderScriptBody(s, si) : ''}
+        </div>
+      `).join('');
+    }
+
+    let expandedScriptIdx = 0;
+    function toggleScript(idx) {
+      expandedScriptIdx = expandedScriptIdx === idx ? -1 : idx;
+      renderScripts();
+    }
+
+    function renderScriptBody(s, si) {
+      return `<div class="script-body">
+        <div class="script-steps">
+          ${s.steps.map((step, sti) => renderStep(step, si, sti)).join('')}
+        </div>
+        <button class="add-step-btn" onclick="addStep(${si})">+ Add Step</button>
+      </div>`;
+    }
+
+    function renderStep(step, si, sti) {
+      const graphicOpts = project.graphics.map(g =>
+        `<option value="${g.id}">${esc(g.name)} (${g.type.replace('_',' ')})</option>`
+      ).join('');
+
+      return `<div class="step-card">
+        <div class="step-header">
+          <div class="step-num">${sti + 1}</div>
+          <span style="flex:1;font-size:12px;color:var(--text-dim)">Step ${sti + 1}</span>
+          <div class="step-btns">
+            ${sti > 0 ? `<button class="btn-ghost" onclick="moveStep(${si},${sti},-1)">▲</button>` : ''}
+            ${sti < project.scripts[si].steps.length - 1 ? `<button class="btn-ghost" onclick="moveStep(${si},${sti},1)">▼</button>` : ''}
+            <button class="btn-ghost" onclick="removeStep(${si},${sti})" style="color:#666">✕</button>
+          </div>
+        </div>
+        <textarea placeholder="Teleprompter text... (what to read)"
+                  onchange="updateStep(${si},${sti},'text',this.value)">${esc(step.text)}</textarea>
+        <div class="step-actions">
+          ${step.actions.map((a, ai) => renderAction(a, ai, si, sti, graphicOpts)).join('')}
+        </div>
+        <button class="btn-ghost" style="font-size:11px;padding:3px 8px;align-self:flex-start"
+                onclick="addAction(${si},${sti})">+ Action</button>
+      </div>`;
+    }
+
+    function renderAction(a, ai, si, sti, graphicOpts) {
+      if (a.type === 'obs') {
+        return renderOBSAction(a, ai, si, sti);
+      }
+      const g = project.graphics.find(g => g.id === a.graphicId);
+      let extra = '';
+      if (a.type === 'update' && g) {
+        const fields = getFieldsForType(g.type);
+        extra = `
+          <select onchange="updateAction(${si},${sti},${ai},'path',this.value)" style="min-width:70px">
+            <option value="">Field...</option>
+            ${fields.map(f => `<option value="${f.path}" ${a.path===f.path?'selected':''}>${f.label}</option>`).join('')}
+          </select>
+          <input type="text" value="${esc(a.value||'')}" placeholder="Value"
+                 onchange="updateAction(${si},${sti},${ai},'value',this.value)" class="action-target">`;
+      }
+      return `<div class="step-action">
+        <select onchange="updateAction(${si},${sti},${ai},'type',this.value)">
+          <option value="show" ${a.type==='show'?'selected':''}>Show</option>
+          <option value="hide" ${a.type==='hide'?'selected':''}>Hide</option>
+          <option value="update" ${a.type==='update'?'selected':''}>Update</option>
+          <option value="obs" ${a.type==='obs'?'selected':''}>OBS</option>
+        </select>
+        <select onchange="updateAction(${si},${sti},${ai},'graphicId',this.value)">
+          <option value="">Graphic...</option>
+          ${graphicOpts.replace(`value="${a.graphicId}"`, `value="${a.graphicId}" selected`)}
+        </select>
+        ${extra}
+        <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function renderOBSAction(a, ai, si, sti) {
+      const obsAct = a.obsAction || '';
+      const needsValue = ['switch_scene','mute','unmute','toggle_mute'].includes(obsAct);
+      const placeholder = obsAct === 'switch_scene' ? 'Scene name' : 'Input name';
+      return `<div class="step-action obs-action">
+        <select onchange="updateAction(${si},${sti},${ai},'type',this.value)">
+          <option value="show">Show</option>
+          <option value="hide">Hide</option>
+          <option value="update">Update</option>
+          <option value="obs" selected>OBS</option>
+        </select>
+        <select onchange="updateAction(${si},${sti},${ai},'obsAction',this.value)">
+          <option value="">Action...</option>
+          <optgroup label="Scenes">
+            <option value="switch_scene" ${obsAct==='switch_scene'?'selected':''}>Switch Scene</option>
+          </optgroup>
+          <optgroup label="Streaming">
+            <option value="start_stream" ${obsAct==='start_stream'?'selected':''}>Start Stream</option>
+            <option value="stop_stream" ${obsAct==='stop_stream'?'selected':''}>Stop Stream</option>
+            <option value="toggle_stream" ${obsAct==='toggle_stream'?'selected':''}>Toggle Stream</option>
+          </optgroup>
+          <optgroup label="Recording">
+            <option value="start_record" ${obsAct==='start_record'?'selected':''}>Start Record</option>
+            <option value="stop_record" ${obsAct==='stop_record'?'selected':''}>Stop Record</option>
+            <option value="toggle_record" ${obsAct==='toggle_record'?'selected':''}>Toggle Record</option>
+          </optgroup>
+          <optgroup label="Audio">
+            <option value="mute" ${obsAct==='mute'?'selected':''}>Mute</option>
+            <option value="unmute" ${obsAct==='unmute'?'selected':''}>Unmute</option>
+            <option value="toggle_mute" ${obsAct==='toggle_mute'?'selected':''}>Toggle Mute</option>
+          </optgroup>
+        </select>
+        ${needsValue ? `<input type="text" value="${esc(a.obsValue||'')}" placeholder="${placeholder}"
+          onchange="updateAction(${si},${sti},${ai},'obsValue',this.value)" class="action-target">` : ''}
+        <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function getFieldsForType(type) {
+      switch(type) {
+        case 'lower_third': return [{path:'title',label:'Title'},{path:'subtitle',label:'Subtitle'}];
+        case 'message': return [{path:'text',label:'Text'},{path:'detail',label:'Detail'}];
+        case 'ticker': return [{path:'items',label:'Items'}];
+        case 'image': return [{path:'url',label:'URL'}];
+        case 'timer': return [{path:'duration',label:'Duration'},{path:'label',label:'Label'}];
+        case 'score': return [
+          {path:'team1.name',label:'Team 1 Name'},{path:'team1.score',label:'Team 1 Score'},
+          {path:'team2.name',label:'Team 2 Name'},{path:'team2.score',label:'Team 2 Score'}
+        ];
+        default: return [];
+      }
+    }
+
+    function addScript() {
+      if (!project.scripts) project.scripts = [];
+      project.scripts.push({
+        id: Math.random().toString(36).slice(2, 10).toUpperCase(),
+        name: 'Script ' + (project.scripts.length + 1),
+        steps: [{ id: genStepId(), text: '', actions: [] }]
+      });
+      expandedScriptIdx = project.scripts.length - 1;
+      save();
+    }
+
+    function genStepId() { return Math.random().toString(36).slice(2, 10); }
+
+    function deleteScript(si) {
+      if (!confirm('Delete this script?')) return;
+      project.scripts.splice(si, 1);
+      if (expandedScriptIdx >= project.scripts.length) expandedScriptIdx = project.scripts.length - 1;
+      save();
+    }
+
+    function renameScript(si) {
+      const name = prompt('Script name:', project.scripts[si].name);
+      if (name) { project.scripts[si].name = name; save(); }
+    }
+
+    function addStep(si) {
+      project.scripts[si].steps.push({ id: genStepId(), text: '', actions: [] });
+      save();
+    }
+
+    function removeStep(si, sti) {
+      project.scripts[si].steps.splice(sti, 1);
+      save();
+    }
+
+    function moveStep(si, sti, dir) {
+      const steps = project.scripts[si].steps;
+      const [moved] = steps.splice(sti, 1);
+      steps.splice(sti + dir, 0, moved);
+      save();
+    }
+
+    function updateStep(si, sti, key, value) {
+      project.scripts[si].steps[sti][key] = value;
+      save();
+    }
+
+    function addAction(si, sti) {
+      project.scripts[si].steps[sti].actions.push({ type: 'show', graphicId: '', path: '', value: '' });
+      save();
+    }
+
+    function removeAction(si, sti, ai) {
+      project.scripts[si].steps[sti].actions.splice(ai, 1);
+      save();
+    }
+
+    function updateAction(si, sti, ai, key, value) {
+      project.scripts[si].steps[sti].actions[ai][key] = value;
+      save();
+    }
+
+    function openTeleprompter(scriptId) {
+      window.open(`/teleprompter/${PROJECT_ID}/${scriptId}`, '_blank', 'width=800,height=900');
+    }
+    function openTeleprompterFlow(scriptId) {
+      window.open(`/teleprompter-flow/${PROJECT_ID}/${scriptId}`, '_blank', 'width=800,height=900');
     }
 
     // ─── Drag & Drop reorder ───────────────────────────────────────────────
@@ -629,6 +1016,11 @@
 
     // ─── Helpers ───────────────────────────────────────────────────────────
     function save() { socket.emit('project:save', project); }
+    async function connectOBS() {
+      const url = document.getElementById('obsUrl').value;
+      const password = document.getElementById('obsPassword').value;
+      socket.emit('obs:connect', { url, password });
+    }
     function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
     function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
     function typeIcon(t) {

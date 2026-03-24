@@ -4,19 +4,23 @@ const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const OBSWebSocket = require('obs-websocket-js').default;
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 const DATA_DIR = path.join(__dirname, 'data');
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const PORT = process.env.PORT || 4001;
 
-// Ensure data directory exists
+// Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ─── Helper: generate short project ID ──────────────────────────────────────
 function shortId() {
@@ -75,7 +79,8 @@ function createDefaultProject(name) {
       textColor: '#ffffff',
       fontFamily: 'Arial, sans-serif',
       customCSS: ''
-    }
+    },
+    scripts: []
   };
 }
 
@@ -314,6 +319,18 @@ app.post('/api/:projectId/updateVariableList/:listId/selectRow/:selector', (req,
   res.json({ ok: true });
 });
 
+// ─── File upload ────────────────────────────────────────────────────────────
+app.post('/api/upload',
+  express.raw({ type: 'image/*', limit: '20mb' }),
+  (req, res) => {
+    const contentType = req.headers['content-type'] || '';
+    const ext = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/svg+xml': '.svg' }[contentType] || '.png';
+    const filename = uuidv4().slice(0, 12) + ext;
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.body);
+    res.json({ url: `/uploads/${filename}` });
+  }
+);
+
 // ─── Page routes ────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
@@ -335,8 +352,96 @@ app.get('/multiview/:projectId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'multiview.html'));
 });
 
+app.get('/teleprompter/:projectId/:scriptId', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'teleprompter.html'));
+});
+
+app.get('/teleprompter-flow/:projectId/:scriptId', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'teleprompter-flow.html'));
+});
+
+// ─── OBS WebSocket ──────────────────────────────────────────────────────────
+const obs = new OBSWebSocket();
+let obsConnected = false;
+
+async function obsConnect(url, password) {
+  try {
+    await obs.disconnect().catch(() => {});
+    await obs.connect(url || 'ws://localhost:4455', password || undefined);
+    obsConnected = true;
+    console.log('  OBS WebSocket connected');
+    io.emit('obs:status', { connected: true });
+  } catch (e) {
+    obsConnected = false;
+    console.log('  OBS WebSocket failed:', e.message);
+    io.emit('obs:status', { connected: false, error: e.message });
+  }
+}
+
+obs.on('ConnectionClosed', () => {
+  obsConnected = false;
+  io.emit('obs:status', { connected: false });
+});
+
+async function executeOBSAction(action) {
+  if (!obsConnected) return { error: 'OBS not connected' };
+  try {
+    switch (action.obsAction) {
+      case 'switch_scene':
+        await obs.call('SetCurrentProgramScene', { sceneName: action.obsValue });
+        break;
+      case 'toggle_source':
+        await obs.call('SetSceneItemEnabled', {
+          sceneName: action.obsScene || undefined,
+          sceneItemId: parseInt(action.obsValue),
+          sceneItemEnabled: action.obsEnabled !== false
+        });
+        break;
+      case 'start_stream': await obs.call('StartStream'); break;
+      case 'stop_stream': await obs.call('StopStream'); break;
+      case 'toggle_stream': await obs.call('ToggleStream'); break;
+      case 'start_record': await obs.call('StartRecord'); break;
+      case 'stop_record': await obs.call('StopRecord'); break;
+      case 'toggle_record': await obs.call('ToggleRecord'); break;
+      case 'mute': await obs.call('SetInputMute', { inputName: action.obsValue, inputMuted: true }); break;
+      case 'unmute': await obs.call('SetInputMute', { inputName: action.obsValue, inputMuted: false }); break;
+      case 'toggle_mute': await obs.call('ToggleInputMute', { inputName: action.obsValue }); break;
+    }
+    return { ok: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// OBS REST endpoints
+app.post('/api/obs/connect', async (req, res) => {
+  await obsConnect(req.body.url, req.body.password);
+  res.json({ connected: obsConnected });
+});
+
+app.get('/api/obs/status', (req, res) => {
+  res.json({ connected: obsConnected });
+});
+
+app.get('/api/obs/scenes', async (req, res) => {
+  if (!obsConnected) return res.json({ scenes: [] });
+  try {
+    const { scenes } = await obs.call('GetSceneList');
+    res.json({ scenes: scenes.map(s => s.sceneName) });
+  } catch (e) { res.json({ scenes: [], error: e.message }); }
+});
+
+app.get('/api/obs/inputs', async (req, res) => {
+  if (!obsConnected) return res.json({ inputs: [] });
+  try {
+    const { inputs } = await obs.call('GetInputList');
+    res.json({ inputs: inputs.map(i => i.inputName) });
+  } catch (e) { res.json({ inputs: [], error: e.message }); }
+});
+
 // ─── Socket.IO ──────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
+  socket.emit('obs:status', { connected: obsConnected });
   socket.on('join', (projectId) => {
     socket.join(projectId);
     const project = loadProject(projectId);
@@ -374,6 +479,46 @@ io.on('connection', (socket) => {
     saveProject(project);
     io.to(project.id).emit('project:update', project);
   });
+
+  socket.on('obs:connect', async ({ url, password }) => {
+    await obsConnect(url, password);
+  });
+
+  socket.on('script:execute', async ({ projectId, actions }) => {
+    const project = loadProject(projectId);
+    if (!project) return;
+    for (const action of actions) {
+      // OBS actions
+      if (action.type === 'obs') {
+        await executeOBSAction(action);
+        continue;
+      }
+      // Graphic actions
+      const g = project.graphics.find(g => g.id === action.graphicId);
+      if (!g) continue;
+      switch (action.type) {
+        case 'show':
+          g.isLive = true; g.isCued = false;
+          io.to(projectId).emit('graphic:show', g);
+          break;
+        case 'hide':
+          g.isLive = false; g.isCued = false;
+          io.to(projectId).emit('graphic:hide', g);
+          break;
+        case 'update':
+          if (action.path) {
+            const parts = action.path.split('.');
+            let target = g.content;
+            for (let i = 0; i < parts.length - 1; i++) target = target[parts[i]];
+            target[parts[parts.length - 1]] = action.value;
+          }
+          io.to(projectId).emit('graphic:update', g);
+          break;
+      }
+    }
+    saveProject(project);
+    io.to(projectId).emit('project:update', project);
+  });
 });
 
 // ─── Default content per graphic type ───────────────────────────────────────
@@ -386,7 +531,7 @@ function getDefaultContent(type) {
     case 'ticker':
       return { items: ['Item 1', 'Item 2', 'Item 3'], speed: 60 };
     case 'image':
-      return { url: '', sizing: 'contain' };
+      return { url: '', sizing: 'contain', library: [] };
     case 'timer':
       return { mode: 'countdown', duration: 300, format: 'mm:ss', label: 'Timer' };
     case 'score':
