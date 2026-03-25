@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const OBSWebSocket = require('obs-websocket-js').default;
+const mammoth = require('mammoth');
 
 const app = express();
 const server = http.createServer(app);
@@ -576,6 +577,175 @@ app.post('/api/:projectId/generate-media', async (req, res) => {
     }
   }
   res.json({ results });
+});
+
+// ─── Production Document Import ─────────────────────────────────────────────
+app.post('/api/:projectId/import-doc',
+  express.raw({ type: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/octet-stream'], limit: '50mb' }),
+  async (req, res) => {
+    try {
+      const result = await mammoth.extractRawText({ buffer: req.body });
+      res.json({ text: result.value });
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to parse document: ' + e.message });
+    }
+  }
+);
+
+app.post('/api/:projectId/generate-layouts-from-doc', async (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const settings = project.settings || {};
+  if (!settings.anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key not set.' });
+
+  const { docText } = req.body;
+  const existingGraphicTypes = ['lower_third', 'message', 'ticker', 'image', 'timer', 'score'];
+
+  const systemPrompt = `You are a broadcast production designer. Analyze a production document and create layouts and graphics for a live broadcast.
+
+A layout combines an OBS scene (camera/video background) with overlay graphics shown on top.
+Available graphic types: ${existingGraphicTypes.join(', ')}
+- lower_third: name + subtitle bar (content: {title, subtitle})
+- message: alert/banner (content: {text, detail})
+- ticker: scrolling text (content: {items:[], speed:60})
+- image: display image (content: {url:'', sizing:'contain', library:[]})
+- timer: countdown/clock (content: {mode:'countdown', duration:300, format:'mm:ss', label:''})
+- score: scoreboard (content: {team1:{name,score:0,color:'#e63946'}, team2:{name,score:0,color:'#1d3557'}})
+
+Return a JSON object:
+{
+  "graphics": [{"type":"<type>", "name":"<name>", "content":{...}}],
+  "layouts": [{"name":"<layout name>", "obsScene":"<suggested OBS scene name>", "graphicNames":["<graphic name>",...]}]
+}
+
+graphicNames references the names of graphics you defined above.
+Create all graphics and layouts needed for the production. Be thorough.
+Each layout should have an appropriate OBS scene name suggestion.`;
+
+  const userPrompt = `Here is the production document:\n\n${docText}\n\nAnalyze this and generate all layouts and graphics needed.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': settings.anthropicApiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 8192, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
+    });
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return res.status(500).json({ error: 'Could not parse AI response' });
+    const result = JSON.parse(match[0]);
+
+    // Create graphics
+    const graphicIdMap = {};
+    for (const gDef of (result.graphics || [])) {
+      const graphic = {
+        id: shortId(),
+        type: gDef.type,
+        name: gDef.name,
+        content: gDef.content || getDefaultContent(gDef.type),
+        isLive: false, isCued: false, order: project.graphics.length
+      };
+      project.graphics.push(graphic);
+      graphicIdMap[gDef.name] = graphic.id;
+    }
+
+    // Create layouts
+    for (const lDef of (result.layouts || [])) {
+      const layout = {
+        id: shortId(),
+        name: lDef.name,
+        obsScene: lDef.obsScene || '',
+        graphics: (lDef.graphicNames || []).map(name => ({ graphicId: graphicIdMap[name] || '', visible: true })).filter(e => e.graphicId)
+      };
+      if (!project.layouts) project.layouts = [];
+      project.layouts.push(layout);
+    }
+
+    saveProject(project);
+    io.to(project.id).emit('project:update', project);
+    res.json({ graphicsCreated: result.graphics?.length || 0, layoutsCreated: result.layouts?.length || 0 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/:projectId/generate-formats-from-doc', async (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const settings = project.settings || {};
+  if (!settings.anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key not set.' });
+
+  const { docText } = req.body;
+
+  // Build graphics/layouts context
+  const graphicsCtx = project.graphics.map(g => `- "${g.name}" (id:${g.id}, type:${g.type})`).join('\n');
+  const layoutsCtx = (project.layouts || []).map(l => `- "${l.name}" (id:${l.id}, obsScene:${l.obsScene})`).join('\n');
+
+  const systemPrompt = `You are a broadcast script format designer. Analyze a production document and create reusable script formats (templates).
+
+A format has steps. Each step has: label, defaultText (template teleprompter text), locked (boolean), and actions.
+Action types:
+- show: {type:"show", graphicId:"<id>"} — show a graphic
+- hide: {type:"hide", graphicId:"<id>"} — hide a graphic
+- update: {type:"update", graphicId:"<id>", path:"<field>", value:"<default>"} — update graphic content
+- layout: {type:"layout", layoutId:"<id>"} — switch to a layout
+- obs: {type:"obs", obsAction:"switch_scene", obsValue:"<scene>"} — OBS action
+- wait: {type:"wait", duration:<seconds>} — pause
+
+Available graphics:
+${graphicsCtx || '(none yet)'}
+
+Available layouts:
+${layoutsCtx || '(none yet)'}
+
+Return a JSON array of formats:
+[{
+  "name": "<format name>",
+  "steps": [{"label":"<step label>", "defaultText":"<template text>", "locked":false, "actions":[...]}]
+}]
+
+Create distinct formats for each segment type described in the production document.
+Use layout actions where appropriate. Reference real graphic and layout IDs from the lists above.
+Mark structural steps (like intros/outros with fixed actions) as locked:true.`;
+
+  const userPrompt = `Here is the production document:\n\n${docText}\n\nGenerate all script formats needed for this production.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': settings.anthropicApiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 8192, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
+    });
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return res.status(500).json({ error: 'Could not parse AI response' });
+    const formats = JSON.parse(match[0]);
+
+    if (!project.formats) project.formats = [];
+    for (const fDef of formats) {
+      project.formats.push({
+        id: shortId(),
+        name: fDef.name,
+        steps: (fDef.steps || []).map(s => ({
+          id: shortId(),
+          label: s.label || '',
+          defaultText: s.defaultText || '',
+          locked: s.locked || false,
+          actions: s.actions || []
+        }))
+      });
+    }
+
+    saveProject(project);
+    io.to(project.id).emit('project:update', project);
+    res.json({ formatsCreated: formats.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── Folder picker (macOS/Linux) ─────────────────────────────────────────────

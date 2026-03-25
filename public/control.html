@@ -389,8 +389,12 @@
     <div class="tab-content" id="tab-layouts">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h3>Layouts</h3>
-        <button class="btn-primary" onclick="addLayout()" style="font-size:12px;padding:5px 12px">+ New Layout</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-ghost" onclick="importDocForLayouts()" style="font-size:12px;padding:5px 12px">📄 Import from Doc</button>
+          <button class="btn-primary" onclick="addLayout()" style="font-size:12px;padding:5px 12px">+ New Layout</button>
+        </div>
       </div>
+      <div id="layoutImportStatus" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:13px"></div>
       <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">A layout combines an OBS scene with a set of graphics. Use layouts in scripts to switch entire visual setups at once.</p>
       <div id="layoutsContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;align-content:start"></div>
     </div>
@@ -408,8 +412,12 @@
     <div class="tab-content" id="tab-formats">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h3>Formats</h3>
-        <button class="btn-primary" onclick="addFormat()" style="font-size:12px;padding:5px 12px">+ New Format</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-ghost" onclick="importDocForFormats()" style="font-size:12px;padding:5px 12px">📄 Import from Doc</button>
+          <button class="btn-primary" onclick="addFormat()" style="font-size:12px;padding:5px 12px">+ New Format</button>
+        </div>
       </div>
+      <div id="formatImportStatus" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:13px"></div>
       <div id="formatsContainer"></div>
     </div>
 
@@ -1057,6 +1065,86 @@
         }
       });
       socket.emit('script:execute', { projectId: PROJECT_ID, actions });
+    }
+
+    // ─── Document Import ──────────────────────────────────────────────────
+    async function uploadDocAndParse(file) {
+      const res = await fetch(`/api/${PROJECT_ID}/import-doc`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data.text;
+    }
+
+    function importDocForLayouts() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.docx,.doc,.txt';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        const status = document.getElementById('layoutImportStatus');
+        status.style.display = '';
+        status.textContent = '📄 Parsing document...';
+        try {
+          const docText = await uploadDocAndParse(file);
+          status.textContent = '🤖 Analyzing document and generating layouts & graphics...';
+          const res = await fetch(`/api/${PROJECT_ID}/generate-layouts-from-doc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ docText })
+          });
+          const data = await res.json();
+          if (data.error) {
+            status.textContent = '❌ ' + data.error;
+            status.style.borderColor = 'var(--red)';
+          } else {
+            status.textContent = `✅ Created ${data.graphicsCreated} graphics and ${data.layoutsCreated} layouts. Set OBS scene names as needed.`;
+            status.style.borderColor = 'var(--green)';
+          }
+        } catch (e) {
+          status.textContent = '❌ ' + e.message;
+          status.style.borderColor = 'var(--red)';
+        }
+      };
+      input.click();
+    }
+
+    function importDocForFormats() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.docx,.doc,.txt';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        const status = document.getElementById('formatImportStatus');
+        status.style.display = '';
+        status.textContent = '📄 Parsing document...';
+        try {
+          const docText = await uploadDocAndParse(file);
+          status.textContent = '🤖 Analyzing document and generating formats...';
+          const res = await fetch(`/api/${PROJECT_ID}/generate-formats-from-doc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ docText })
+          });
+          const data = await res.json();
+          if (data.error) {
+            status.textContent = '❌ ' + data.error;
+            status.style.borderColor = 'var(--red)';
+          } else {
+            status.textContent = `✅ Created ${data.formatsCreated} formats. Review and customize as needed.`;
+            status.style.borderColor = 'var(--green)';
+          }
+        } catch (e) {
+          status.textContent = '❌ ' + e.message;
+          status.style.borderColor = 'var(--red)';
+        }
+      };
+      input.click();
     }
 
     // ─── Scripts ───────────────────────────────────────────────────────────
