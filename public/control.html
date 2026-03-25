@@ -535,15 +535,19 @@
 
   <!-- Format generator modal -->
   <div class="modal-overlay" id="formatModal">
-    <div class="modal" style="min-width:700px;max-width:850px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal" style="min-width:700px;max-width:850px;max-height:92vh;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:12px">
         <h2 id="formatModalTitle" style="margin:0">Generate Script</h2>
-        <button class="btn-primary" onclick="aiGenerate()" id="aiGenBtn" style="font-size:12px;padding:6px 16px">✨ Generate with AI</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-ghost" onclick="aiGenerateRequirements()" id="aiReqBtn" style="font-size:12px;padding:6px 12px">📋 Generate Checklist</button>
+          <button class="btn-primary" onclick="aiGenerate()" id="aiGenBtn" style="font-size:12px;padding:6px 16px">✨ Generate with AI</button>
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:8px;flex-shrink:0">
         <label>Script Name</label>
         <input type="text" id="fmScriptName" style="width:100%">
       </div>
+      <div id="fmRequirements"></div>
       <div class="form-group" style="margin-bottom:8px;flex-shrink:0">
         <label>Global Notes (context for AI)</label>
         <textarea id="fmGlobalNotes" rows="2" placeholder="Overall context, topic, guests, etc." style="width:100%;font-size:12px"></textarea>
@@ -573,7 +577,7 @@
           <div id="fmAiMediaList" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
       </div>
-      <div id="fmSteps" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px"></div>
+      <div id="fmSteps" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="modal-actions" style="flex-shrink:0">
         <button class="btn-ghost" onclick="closeFormatModal()">Cancel</button>
         <button class="btn-primary" onclick="generateScript()">Create Script</button>
@@ -581,6 +585,9 @@
     </div>
   </div>
   <div class="lock-bar" id="lockBar" style="display:none" onclick="toggleLock()">🔒 Show Locked — Click to Unlock</div>
+
+  <!-- Job status banner -->
+  <div id="jobBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:1000;padding:10px 20px;font-size:13px;font-weight:600;text-align:center;transition:background 0.3s"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -590,6 +597,46 @@
     let isLocked = false;
 
     socket.emit('join', PROJECT_ID);
+
+    // Job status
+    socket.on('job:update', showJob);
+    // Check for running jobs on page load
+    fetch(`/api/${PROJECT_ID}/jobs`).then(r => r.json()).then(d => { if (d.job) showJob(d.job); });
+
+    function showJob(job) {
+      const banner = document.getElementById('jobBanner');
+      if (!job || job.status === 'done') {
+        if (job && job.status === 'done') {
+          banner.style.display = '';
+          banner.style.background = '#1a5a2a';
+          banner.style.color = '#fff';
+          banner.textContent = '✅ ' + job.message;
+          setTimeout(() => { banner.style.display = 'none'; }, 8000);
+        } else {
+          banner.style.display = 'none';
+        }
+        return;
+      }
+      banner.style.display = '';
+      if (job.status === 'running') {
+        const elapsed = Math.round((Date.now() - new Date(job.startedAt).getTime()) / 1000);
+        banner.style.background = 'var(--accent)';
+        banner.style.color = '#fff';
+        banner.textContent = `⏳ ${job.message} (${elapsed}s)`;
+      } else if (job.status === 'error') {
+        banner.style.background = '#5a1a1a';
+        banner.style.color = '#fff';
+        banner.textContent = '❌ ' + job.message;
+        setTimeout(() => { banner.style.display = 'none'; }, 15000);
+      }
+    }
+
+    // Update elapsed time for running jobs
+    setInterval(async () => {
+      const res = await fetch(`/api/${PROJECT_ID}/jobs`);
+      const { job } = await res.json();
+      if (job && job.status === 'running') showJob(job);
+    }, 5000);
 
     // OBS status
     socket.on('obs:status', (s) => {
@@ -601,6 +648,22 @@
         if (label) label.textContent = s.connected ? 'Connected' : (s.error || 'Disconnected');
         if (btn) btn.textContent = s.connected ? 'Disconnect' : 'Connect';
       });
+      // Update all script OBS panels
+      document.querySelectorAll('.obs-conn-dot').forEach(connDot => {
+        const dot = connDot.querySelector('.obs-dot');
+        const label = connDot.querySelector('.obs-conn-label');
+        if (dot) { dot.style.background = s.connected ? '#2ecc71' : '#e63946'; dot.style.boxShadow = s.connected ? '0 0 6px #2ecc71' : ''; }
+        if (label) label.textContent = s.connected ? ' Connected' : ' Not connected';
+        const panel = connDot.closest('[id^="obs-script-"]');
+        if (panel) {
+          const cb = panel.querySelector('.obs-connect-btn');
+          if (cb) cb.style.display = s.connected ? 'none' : '';
+        }
+      });
+      // Auto-test scenes when connected
+      if (s.connected) {
+        Object.keys(obsPanelScenes).forEach(panelId => testScenes(panelId));
+      }
     });
 
     socket.on('project:update', (p) => {
@@ -1178,8 +1241,106 @@
       renderScripts();
     }
 
+    function getRequiredScenes(script) {
+      const scenes = new Set();
+      for (const step of script.steps) {
+        for (const a of step.actions) {
+          if (a.type === 'obs' && a.obsAction === 'switch_scene' && a.obsValue) scenes.add(a.obsValue);
+          if (a.type === 'layout') {
+            const layout = (project.layouts || []).find(l => l.id === a.layoutId);
+            if (layout && layout.obsScene) scenes.add(layout.obsScene);
+          }
+        }
+      }
+      return [...scenes];
+    }
+
+    const obsPanelScenes = {}; // panelId -> scenes array
+
+    function renderObsPanel(scenes, panelId) {
+      if (!scenes.length) return '';
+      obsPanelScenes[panelId] = scenes;
+      return `<div id="${panelId}" style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:8px 12px;background:var(--surface2);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:14px">🎥</span>
+          <span style="font-size:12px;font-weight:600;flex:1">Required OBS Scenes</span>
+          <span class="obs-conn-dot" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim)">
+            <span class="obs-dot" style="width:8px;height:8px;border-radius:50%;background:#555"></span>
+            <span class="obs-conn-label">OBS</span>
+          </span>
+          <button class="btn-ghost obs-connect-btn" style="font-size:10px;padding:3px 10px" onclick="quickConnectOBS('${panelId}')">${hasObsSettings() ? 'Connect' : '⚙ Settings'}</button>
+          <button class="btn-ghost" style="font-size:10px;padding:3px 10px" onclick="testScenes('${panelId}')">Test Scenes</button>
+        </div>
+        <div style="padding:6px 12px;display:flex;flex-direction:column;gap:3px">
+          ${scenes.map(s => `<div class="scene-tag" data-scene="${esc(s)}" style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;border-radius:4px">
+            <span class="scene-dot" style="width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0"></span>
+            ${esc(s)}
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    function hasObsSettings() {
+      return !!(project && project.settings && project.settings.obsUrl);
+    }
+
+    function quickConnectOBS(panelId) {
+      if (!hasObsSettings()) {
+        document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('[data-tab="settings"]').classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-settings').classList.add('active');
+        document.getElementById('sidebar').style.display = 'none';
+        return;
+      }
+      const s = project.settings;
+      socket.emit('obs:connect', { url: s.obsUrl, password: s.obsPassword });
+      setTimeout(() => testScenes(panelId), 2000);
+    }
+
+    async function testScenes(panelId) {
+      const scenes = obsPanelScenes[panelId] || [];
+      const panel = document.getElementById(panelId);
+      if (!panel) return;
+      const res = await fetch('/api/obs/test-scenes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes })
+      });
+      const data = await res.json();
+      // Update connection dot
+      const connDot = panel.querySelector('.obs-conn-dot');
+      if (connDot) {
+        const dot = connDot.querySelector('.obs-dot');
+        if (data.connected) {
+          dot.style.background = '#2ecc71'; dot.style.boxShadow = '0 0 6px #2ecc71';
+          connDot.querySelector('.obs-conn-label').textContent = ' Connected';
+          const cb = panel.querySelector('.obs-connect-btn');
+          if (cb) cb.style.display = 'none';
+        } else {
+          dot.style.background = '#e63946';
+          connDot.querySelector('.obs-conn-label').textContent = ' Not connected';
+          return;
+        }
+      }
+      // Update scene dots
+      panel.querySelectorAll('.scene-tag').forEach(tag => {
+        const name = tag.dataset.scene;
+        const dot = tag.querySelector('.scene-dot');
+        if (data.results[name]) {
+          dot.style.background = '#2ecc71'; dot.style.boxShadow = '0 0 6px #2ecc71';
+        } else {
+          dot.style.background = '#e63946'; dot.style.boxShadow = '0 0 6px #e63946';
+        }
+      });
+    }
+
     function renderScriptBody(s, si) {
+      const scenes = getRequiredScenes(s);
+      const panelId = 'obs-script-' + si;
+      // Auto-check OBS status after render
+      if (scenes.length) setTimeout(() => testScenes(panelId), 100);
       return `<div class="script-body">
+        ${renderObsPanel(scenes, panelId)}
         <div class="script-steps">
           ${s.steps.map((step, sti) => renderStep(step, si, sti)).join('')}
         </div>
@@ -1455,7 +1616,30 @@
     }
 
     function renderFormatBody(f, fi) {
+      const reqs = f.requirements || [];
       return `<div class="script-body">
+        <div style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);font-weight:500">Episode Requirements</label>
+            <button class="btn-ghost" style="font-size:10px;padding:2px 8px" onclick="addFmtReq(${fi})">+ Add</button>
+          </div>
+          ${reqs.length ? reqs.map((r, ri) => `
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+              <select style="font-size:11px;padding:3px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);min-width:80px"
+                      onchange="updateFmtReq(${fi},${ri},'type',this.value)">
+                <option value="text" ${r.type==='text'?'selected':''}>Text</option>
+                <option value="file" ${r.type==='file'?'selected':''}>File Upload</option>
+                <option value="url" ${r.type==='url'?'selected':''}>URL</option>
+                <option value="choice" ${r.type==='choice'?'selected':''}>Choice</option>
+              </select>
+              <input type="text" value="${esc(r.label||'')}" placeholder="Label (e.g. Guest Name, Topic Image)" style="flex:1;font-size:11px;padding:3px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                     onchange="updateFmtReq(${fi},${ri},'label',this.value)">
+              ${r.type === 'choice' ? `<input type="text" value="${esc(r.options||'')}" placeholder="option1, option2, ..." style="flex:1;font-size:11px;padding:3px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                     onchange="updateFmtReq(${fi},${ri},'options',this.value)">` : ''}
+              <button class="btn-ghost" style="padding:2px 6px;color:#666;font-size:12px" onclick="removeFmtReq(${fi},${ri})">✕</button>
+            </div>
+          `).join('') : '<div style="font-size:11px;color:var(--text-dim);padding:4px 0">No requirements. Add items the user must provide for each episode.</div>'}
+        </div>
         <div class="script-steps">
           ${f.steps.map((step, sti) => renderFormatStep(step, fi, sti)).join('')}
         </div>
@@ -1565,13 +1749,17 @@
       project.formats.push({
         id: Math.random().toString(36).slice(2, 10).toUpperCase(),
         name: 'Format ' + (project.formats.length + 1),
-        steps: [{ id: genStepId(), label: '', defaultText: '', actions: [] }]
+        steps: [{ id: genStepId(), label: '', defaultText: '', actions: [] }],
+        requirements: []
       });
       expandedFormatIdx = project.formats.length - 1;
       save();
     }
     function deleteFormat(fi) { if (confirm('Delete this format?')) { project.formats.splice(fi, 1); save(); } }
     function renameFormat(fi) { const n = prompt('Format name:', project.formats[fi].name); if (n) { project.formats[fi].name = n; save(); } }
+    function addFmtReq(fi) { if (!project.formats[fi].requirements) project.formats[fi].requirements = []; project.formats[fi].requirements.push({ type: 'text', label: '' }); save(); }
+    function removeFmtReq(fi, ri) { project.formats[fi].requirements.splice(ri, 1); save(); }
+    function updateFmtReq(fi, ri, key, val) { project.formats[fi].requirements[ri][key] = val; save(); }
     function addFormatStep(fi) { project.formats[fi].steps.push({ id: genStepId(), label: '', defaultText: '', actions: [] }); save(); }
     function removeFmtStep(fi, sti) { project.formats[fi].steps.splice(sti, 1); save(); }
     function moveFmtStep(fi, sti, dir) { const s = project.formats[fi].steps; const [m] = s.splice(sti, 1); s.splice(sti + dir, 0, m); save(); }
@@ -1585,6 +1773,7 @@
     let modalSteps = [];
     let modalGlobalNotes = '';
     let modalGlobalMedia = [];
+    let modalRequirements = []; // [{label, type, value, done}]
     let aiActionsEnabled = false;
     let aiAvailableActions = []; // [{id, label, type, graphicId, ...}]
     let aiMediaEnabled = false;
@@ -1599,6 +1788,9 @@
       // Deep clone steps, add notes/media fields
       modalSteps = JSON.parse(JSON.stringify(fmt.steps));
       modalSteps.forEach(s => { s.notes = s.notes || ''; s.media = s.media || []; s.text = s.text || s.defaultText || ''; });
+      // Build requirements from format
+      modalRequirements = (fmt.requirements || []).map(r => ({ ...r, value: '', done: false, files: [] }));
+      renderRequirements();
       aiActionsEnabled = false;
       aiAvailableActions = buildAvailableActions();
       aiMediaEnabled = false;
@@ -1617,6 +1809,125 @@
 
     function closeFormatModal() {
       document.getElementById('formatModal').classList.remove('open');
+    }
+
+    function renderRequirements() {
+      const c = document.getElementById('fmRequirements');
+      if (!c || !modalRequirements.length) { if (c) c.innerHTML = ''; return; }
+      const allDone = modalRequirements.every(r => r.done);
+      c.innerHTML = `
+        <div style="margin-bottom:10px;border:1px solid ${allDone ? 'var(--green)' : 'var(--accent)'};border-radius:8px;overflow:hidden">
+          <div style="padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px">${allDone ? '✅' : '📋'}</span>
+            <span style="font-size:12px;font-weight:600;flex:1">Episode Prep Checklist</span>
+            <button onclick="exportRequirements()" class="btn-ghost" style="font-size:10px;padding:2px 8px">📥 Export</button>
+            <button onclick="importEpisodeData()" class="btn-ghost" style="font-size:10px;padding:2px 8px">📤 Import</button>
+            <span style="font-size:11px;color:var(--text-dim)">${modalRequirements.filter(r=>r.done).length}/${modalRequirements.length}</span>
+          </div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto">
+            ${modalRequirements.map((r, i) => renderReqItem(r, i)).join('')}
+          </div>
+        </div>`;
+    }
+
+    function renderReqItem(r, i) {
+      const done = r.done;
+      let input = '';
+      switch (r.type) {
+        case 'text':
+          input = `<input type="text" value="${esc(r.value||'')}" placeholder="Enter ${esc(r.label)}..."
+                     style="flex:1;font-size:12px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                     onchange="modalRequirements[${i}].value=this.value; modalRequirements[${i}].done=!!this.value; renderRequirements()">`;
+          break;
+        case 'url':
+          input = `<input type="url" value="${esc(r.value||'')}" placeholder="https://..."
+                     style="flex:1;font-size:12px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                     onchange="modalRequirements[${i}].value=this.value; modalRequirements[${i}].done=!!this.value; renderRequirements()">`;
+          break;
+        case 'file':
+          input = `<div style="flex:1;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            ${(r.files||[]).map(f => `<span style="font-size:10px;background:var(--border);padding:2px 6px;border-radius:3px">📎 ${esc(f.split('/').pop())}</span>`).join('')}
+            <button class="btn-ghost" style="font-size:10px;padding:2px 8px" onclick="uploadReqFile(${i})">Upload</button>
+          </div>`;
+          break;
+        case 'choice':
+          const opts = (r.options || '').split(',').map(o => o.trim()).filter(Boolean);
+          input = `<select style="flex:1;font-size:12px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)"
+                     onchange="modalRequirements[${i}].value=this.value; modalRequirements[${i}].done=!!this.value; renderRequirements()">
+                     <option value="">Select...</option>
+                     ${opts.map(o => `<option value="${esc(o)}" ${r.value===o?'selected':''}>${esc(o)}</option>`).join('')}
+                   </select>`;
+          break;
+      }
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;${done ? 'opacity:0.6' : ''}">
+        <span style="font-size:14px;width:20px;text-align:center">${done ? '✅' : '⬜'}</span>
+        <span style="font-size:12px;font-weight:500;min-width:100px;color:${done ? 'var(--green)' : 'var(--text)'}">${esc(r.label)}</span>
+        ${input}
+      </div>`;
+    }
+
+    function uploadReqFile(ri) {
+      const input = document.createElement('input');
+      input.type = 'file'; input.multiple = true;
+      input.accept = 'image/*,audio/*,video/*,.pdf,.docx,.txt';
+      input.onchange = async () => {
+        if (!modalRequirements[ri].files) modalRequirements[ri].files = [];
+        for (const file of input.files) {
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+          const { url } = await res.json();
+          modalRequirements[ri].files.push(url);
+        }
+        modalRequirements[ri].done = modalRequirements[ri].files.length > 0;
+        renderRequirements();
+      };
+      input.click();
+    }
+
+    async function exportRequirements() {
+      const scriptName = document.getElementById('fmScriptName').value || 'episode';
+      const res = await fetch(`/api/${PROJECT_ID}/export-requirements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirements: modalRequirements, scriptName })
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = scriptName.replace(/[^a-zA-Z0-9]/g, '_') + '_requirements.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importEpisodeData() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.zip';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          const res = await fetch(`/api/${PROJECT_ID}/import-episode-data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: file
+          });
+          const data = await res.json();
+          if (data.error) { alert('Import error: ' + data.error); return; }
+          // Merge imported data into modalRequirements
+          const imported = data.requirements;
+          imported.forEach(imp => {
+            const match = modalRequirements.find(r => r.label === imp.label);
+            if (match) {
+              if (imp.value) { match.value = imp.value; match.done = true; }
+              if (imp.files && imp.files.length) { match.files = imp.files; match.done = true; }
+            }
+          });
+          renderRequirements();
+          alert(`Imported ${imported.filter(r => r.done).length} items successfully.`);
+        } catch (e) { alert('Import error: ' + e.message); }
+      };
+      input.click();
     }
 
     function renderModalSteps() {
@@ -1779,6 +2090,53 @@
       `).join('');
     }
 
+    async function aiGenerateRequirements() {
+      const btn = document.getElementById('aiReqBtn');
+      btn.textContent = '⏳ Analyzing...';
+      btn.disabled = true;
+      const fmt = project.formats[currentFormatIdx];
+
+      // Build context about the format
+      const stepsDesc = modalSteps.map((s, i) => {
+        const actDesc = s.actions.map(a => {
+          if (a.type === 'show' || a.type === 'hide') {
+            const g = project.graphics.find(g => g.id === a.graphicId);
+            return `${a.type}: ${g ? g.name + ' (' + g.type + ')' : a.graphicId}`;
+          }
+          if (a.type === 'update') {
+            const g = project.graphics.find(g => g.id === a.graphicId);
+            return `update ${g ? g.name : '?'}.${a.path} = "${a.value || ''}"`;
+          }
+          if (a.type === 'layout') {
+            const l = (project.layouts||[]).find(l => l.id === a.layoutId);
+            return `layout: ${l ? l.name : '?'}`;
+          }
+          if (a.type === 'obs') return `OBS: ${a.obsAction} ${a.obsValue || ''}`;
+          if (a.type === 'wait') return `wait ${a.duration}s`;
+          return a.type;
+        }).join(', ');
+        return `Step ${i+1}: "${s.label||'Untitled'}" ${s.locked ? '[LOCKED]' : ''}\n  Text: "${s.defaultText || s.text || ''}"\n  Actions: ${actDesc || 'none'}`;
+      }).join('\n');
+
+      const graphicsDesc = project.graphics.map(g => `- ${g.name} (${g.type})`).join('\n');
+
+      try {
+        const res = await fetch(`/api/${PROJECT_ID}/generate-requirements`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stepsDesc, graphicsDesc, formatName: fmt.name })
+        });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); }
+        else if (data.requirements) {
+          modalRequirements = data.requirements.map(r => ({ ...r, value: '', done: false, files: [] }));
+          renderRequirements();
+        }
+      } catch(e) { alert('Error: ' + e.message); }
+      btn.textContent = '📋 Generate Checklist';
+      btn.disabled = false;
+    }
+
     async function aiGenerate() {
       const btn = document.getElementById('aiGenBtn');
       const origText = btn.textContent;
@@ -1810,6 +2168,7 @@
             aiAvailableActions: aiActionsEnabled ? aiAvailableActions.filter(a => a.enabled) : [],
             aiMediaEnabled,
             aiMediaServices: aiMediaEnabled ? aiMediaServices.filter(s => s.enabled) : [],
+            requirements: modalRequirements.map(r => ({ label: r.label, type: r.type, value: r.value, files: r.files })),
             steps: modalSteps.map(s => ({
               label: s.label,
               locked: s.locked,

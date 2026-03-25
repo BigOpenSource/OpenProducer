@@ -153,8 +153,10 @@
       <button onclick="changeFontSize(4)">A+</button>
     </div>
     <span class="tp-progress" id="progress">0 / 0</span>
+    <button class="btn-reset" onclick="clearAll()" style="background:#e63946;color:#fff">Clear</button>
     <button class="btn-reset" onclick="resetScript()">Reset</button>
   </div>
+  <div id="obsPanel" style="max-width:900px;margin:12px auto 0;padding:0 20px"></div>
   <div class="tp-body" id="tpBody"></div>
   <div class="tp-hint"><kbd>Space</kbd> or <kbd>Enter</kbd> to fire cue &amp; advance</div>
 
@@ -178,9 +180,88 @@
       script = project.scripts.find(s => s.id === SCRIPT_ID);
       if (script) {
         document.getElementById('scriptName').textContent = script.name;
+        renderObsPanel();
+        setTimeout(tpTestScenes, 200);
         renderTeleprompter();
       }
     });
+
+    function getRequiredScenes() {
+      if (!script) return [];
+      const scenes = new Set();
+      for (const step of script.steps) {
+        for (const a of step.actions) {
+          if (a.type === 'obs' && a.obsAction === 'switch_scene' && a.obsValue) scenes.add(a.obsValue);
+          if (a.type === 'layout') {
+            const layout = (project.layouts || []).find(l => l.id === a.layoutId);
+            if (layout && layout.obsScene) scenes.add(layout.obsScene);
+          }
+        }
+      }
+      return [...scenes];
+    }
+
+    function renderObsPanel() {
+      const scenes = getRequiredScenes();
+      const panel = document.getElementById('obsPanel');
+      if (!scenes.length) { panel.innerHTML = ''; return; }
+      panel.innerHTML = `<div id="tp-obs-panel" style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:8px 12px;background:var(--surface);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:14px">🎥</span>
+          <span style="font-size:12px;font-weight:600;flex:1">Required OBS Scenes</span>
+          <span id="tp-obs-conn" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim)">
+            <span class="obs-d" style="width:8px;height:8px;border-radius:50%;background:#555;display:inline-block"></span> OBS
+          </span>
+          <button id="tp-obs-connect-btn" onclick="tpQuickConnect()" style="font-size:10px;padding:3px 10px;background:var(--border);color:var(--text);border:none;border-radius:4px;cursor:pointer">Connect</button>
+          <button onclick="tpTestScenes()" style="font-size:10px;padding:3px 10px;background:var(--border);color:var(--text);border:none;border-radius:4px;cursor:pointer">Test Scenes</button>
+        </div>
+        <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px">
+          ${scenes.map(s => `<span class="tp-scene-tag" data-scene="${esc(s)}" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+            <span class="s-dot" style="width:8px;height:8px;border-radius:50%;background:#555;display:inline-block"></span>
+            ${esc(s)}
+          </span>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    async function tpTestScenes() {
+      const scenes = getRequiredScenes();
+      const res = await fetch('/api/obs/test-scenes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes })
+      });
+      const data = await res.json();
+      const conn = document.getElementById('tp-obs-conn');
+      if (conn) {
+        if (data.connected) {
+          conn.innerHTML = '<span class="obs-d" style="width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block"></span> Connected';
+          const cb = document.getElementById('tp-obs-connect-btn');
+          if (cb) cb.style.display = 'none';
+        } else {
+          conn.innerHTML = '<span class="obs-d" style="width:8px;height:8px;border-radius:50%;background:#e63946;display:inline-block"></span> Not connected';
+          return;
+        }
+      }
+      document.querySelectorAll('.tp-scene-tag').forEach(tag => {
+        const dot = tag.querySelector('.s-dot');
+        if (data.results[tag.dataset.scene]) { dot.style.background = '#2ecc71'; dot.style.boxShadow = '0 0 6px #2ecc71'; }
+        else { dot.style.background = '#e63946'; dot.style.boxShadow = '0 0 6px #e63946'; }
+      });
+    }
+
+    function tpQuickConnect() {
+      const s = project && project.settings;
+      if (s && s.obsUrl) {
+        socket.emit('obs:connect', { url: s.obsUrl, password: s.obsPassword });
+        setTimeout(tpTestScenes, 2000);
+      } else {
+        const url = prompt('OBS WebSocket URL:', 'ws://localhost:4455');
+        if (!url) return;
+        const pw = prompt('OBS Password (leave blank if none):', '');
+        socket.emit('obs:connect', { url, password: pw });
+        setTimeout(tpTestScenes, 2000);
+      }
+    }
 
     function renderTeleprompter() {
       if (!script) return;
@@ -222,17 +303,8 @@
             <div class="tp-step-num">${fired ? '✓' : i + 1}</div>
             <span class="tp-step-label">Step ${i + 1}</span>
           </div>
-          ${step.text ? `<div class="tp-step-text" style="font-size:${fontSize}px">${esc(step.text)}</div>` : ''}
-          ${i === currentStep && step.actions.length > 0 ? `
-            <div class="tp-step-footer">
-              <div class="tp-step-actions">${actionBadges}</div>
-              <button class="tp-cue-btn ${fired ? 'fired' : ''}"
-                      onclick="${fired ? '' : `fireCue(${i})`}"
-                      id="cue-${i}">
-                ${fired ? '✓ Fired' : '▶ Fire Cue'}
-              </button>
-            </div>
-          ` : ''}
+          ${i === currentStep && step.actions.length > 0 ? '<div class="tp-step-footer"><div class="tp-step-actions">' + actionBadges + '</div><button class="tp-cue-btn ' + (fired ? 'fired' : '') + '" onclick="' + (fired ? '' : 'fireCue(' + i + ')') + '" id="cue-' + i + '">' + (fired ? '✓ Fired' : '▶ Fire Cue') + '</button></div>' : ''}
+          ${step.text ? '<div class="tp-step-text" style="font-size:' + fontSize + 'px">' + esc(step.text) + '</div>' : ''}
         </div>`;
       }).join('') + '<div class="tp-end">End of script</div>';
 
@@ -273,6 +345,10 @@
       }
     }
 
+    function clearAll() {
+      fetch('/api/' + PROJECT_ID + '/clear', { method: 'POST' });
+    }
+
     function resetScript() {
       currentStep = 0;
       firedSteps.clear();
@@ -305,7 +381,7 @@
       if (s == null) return '';
       const d = document.createElement('div');
       d.textContent = String(s);
-      return d.innerHTML;
+      return d.innerHTML.replace(/`/g, '&#96;').replace(/\$/g, '&#36;');
     }
   </script>
 </body>

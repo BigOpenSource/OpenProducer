@@ -70,6 +70,14 @@
     .graphic-show { animation-fill-mode: forwards; }
     .graphic-hide { animation-fill-mode: forwards; }
 
+    /* ─── Z-index layers ────────────────────────────────────────────────── */
+    .ticker { z-index: 10; }
+    .lower_third { z-index: 20; }
+    .score-graphic { z-index: 30; }
+    .message { z-index: 40; }
+    .timer-graphic { z-index: 15; }
+    .image-graphic { z-index: 5; }
+
     /* ─── Lower Third ────────────────────────────────────────────────────── */
     .lower_third {
       position: absolute;
@@ -510,6 +518,19 @@
       }
 
       el.dataset.graphicId = g.id;
+      el.dataset.graphicType = g.type;
+
+      // Offset multiple graphics of the same type to prevent overlap
+      const sameType = container.querySelectorAll(`[data-graphic-type="${g.type}"]`);
+      if (sameType.length > 0 && (g.type === 'lower_third' || g.type === 'message')) {
+        const offset = sameType.length;
+        if (g.type === 'lower_third') {
+          el.style.bottom = (80 + offset * 90) + 'px';
+        } else if (g.type === 'message') {
+          el.style.top = (50 + offset * 120) + 'px';
+        }
+      }
+
       container.appendChild(el);
       liveGraphics.set(g.id, el);
 

@@ -60,42 +60,30 @@
       padding: 40px 30px 200px 60px;
     }
 
-    /* ─── Step marker ──────── */
+    /* ─── Step spacer ──────── */
     .flow-marker {
-      display: flex; align-items: center; gap: 10px;
-      margin: 28px 0 10px; position: relative;
-    }
-    .flow-marker:first-child { margin-top: 0; }
-    .flow-marker .marker-num {
-      width: 26px; height: 26px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; flex-shrink: 0;
-      background: var(--border); color: var(--text-dim);
-      transition: background 0.3s, color 0.3s;
-    }
-    .flow-marker.done .marker-num { background: var(--green); color: #fff; }
-    .flow-marker.current .marker-num { background: var(--accent); color: #fff; }
-    .flow-marker .marker-line {
-      flex: 1; height: 1px; background: var(--border);
+      height: 24px;
     }
 
-    /* ─── Pointer triangle (on text) ──────── */
+    /* ─── Pointer triangle ──────── */
     .flow-pointer {
       position: absolute;
-      left: -6px; top: 0;
+      left: 2px; top: 12px;
       width: 0; height: 0;
-      border-top: 12px solid transparent;
-      border-bottom: 12px solid transparent;
-      border-left: 16px solid var(--accent);
+      border-top: 14px solid transparent;
+      border-bottom: 14px solid transparent;
+      border-left: 18px solid var(--accent);
       opacity: 0; transition: opacity 0.3s;
       filter: drop-shadow(0 0 6px rgba(108,92,231,0.5));
+      z-index: 2;
     }
-    .flow-text-wrap.current .flow-pointer { opacity: 1; }
+    .flow-text-wrap.current .flow-pointer,
+    .flow-cue.pointing .flow-pointer { opacity: 1; }
 
     /* ─── Text block ──────── */
     .flow-text-wrap {
       position: relative;
-      padding-left: 36px;
+      padding-left: 40px;
     }
     .flow-text {
       font-size: 32px; line-height: 1.6;
@@ -109,20 +97,21 @@
     /* ─── Cue bar (inline) ──────── */
     .flow-cue {
       display: flex; align-items: center; gap: 8px;
-      margin: 8px 0 4px; padding: 8px 12px;
-      margin-left: 36px;
+      margin: 0 0 24px; padding: 10px 14px;
+      margin-left: 40px;
       border-radius: 8px;
       background: var(--surface);
       border: 1px solid var(--border);
       transition: border-color 0.3s, opacity 0.3s;
+      position: relative;
     }
     .flow-cue.current { border-color: var(--accent); }
     .flow-cue.done { opacity: 0.35; }
     .flow-cue .cue-badges {
-      display: flex; flex-wrap: wrap; gap: 4px; flex: 1;
+      display: flex; flex-direction: column; gap: 4px; flex: 1;
     }
     .flow-cue .cue-badge {
-      font-size: 10px; padding: 2px 8px; border-radius: 4px;
+      font-size: 13px; padding: 4px 10px; border-radius: 5px;
       font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
     }
     .cue-badge.show { background: rgba(46,204,113,0.15); color: var(--green); }
@@ -144,16 +133,17 @@
     .flow-fire-btn.fired { background: var(--green); cursor: default; }
 
     /* Pointer on cue bar */
-    .flow-cue { position: relative; }
     .flow-cue .flow-pointer {
-      left: -6px; top: 50%; transform: translateY(-50%);
+      left: -38px; top: 50%; transform: translateY(-50%);
     }
     .flow-cue.pointing .flow-pointer { opacity: 1; }
 
-    /* Fired flash */
+    /* Fired - fade out */
     .flow-cue.just-fired {
       border-color: var(--green);
       background: rgba(46,204,113,0.08);
+      opacity: 0.25;
+      transition: opacity 0.6s ease;
     }
 
     .flow-end {
@@ -183,8 +173,10 @@
       <button onclick="changeFontSize(4)">A+</button>
     </div>
     <span class="tp-progress" id="progress">0 / 0</span>
+    <button class="btn-reset" onclick="clearAll()" style="background:#e63946;color:#fff">Clear</button>
     <button class="btn-reset" onclick="resetScript()">Reset</button>
   </div>
+  <div id="obsPanel" style="max-width:800px;margin:12px auto 0;padding:0 30px"></div>
   <div class="flow-body" id="flowBody"></div>
   <div class="tp-hint"><kbd>Space</kbd> or <kbd>Enter</kbd> to fire cue &amp; advance</div>
 
@@ -197,8 +189,8 @@
     let project = null;
     let script = null;
     let currentStep = 0;
-    // subStep: 'text' = pointer on text, 'cue' = pointer on cue bar, 'fired' = just fired
-    let subStep = 'text';
+    // subStep: 'cue' = pointer on cue bar, 'fired' = just fired, 'text' = pointer on text (read it)
+    let subStep = 'cue'; // will be set properly on first load
     let firedSteps = new Set();
     let fontSize = 32;
 
@@ -210,9 +202,92 @@
       script = project.scripts.find(s => s.id === SCRIPT_ID);
       if (script) {
         document.getElementById('scriptName').textContent = script.name;
+        // Set initial subStep on first load
+        if (currentStep === 0 && !firedSteps.size) {
+          subStep = (script.steps[0] && script.steps[0].actions.length > 0) ? 'cue' : 'text';
+        }
+        renderObsPanel();
+        setTimeout(flTestScenes, 200);
         renderFlow();
       }
     });
+
+    function getRequiredScenes() {
+      if (!script) return [];
+      const scenes = new Set();
+      for (const step of script.steps) {
+        for (const a of step.actions) {
+          if (a.type === 'obs' && a.obsAction === 'switch_scene' && a.obsValue) scenes.add(a.obsValue);
+          if (a.type === 'layout') {
+            const layout = (project.layouts || []).find(l => l.id === a.layoutId);
+            if (layout && layout.obsScene) scenes.add(layout.obsScene);
+          }
+        }
+      }
+      return [...scenes];
+    }
+
+    function renderObsPanel() {
+      const scenes = getRequiredScenes();
+      const panel = document.getElementById('obsPanel');
+      if (!scenes.length) { panel.innerHTML = ''; return; }
+      panel.innerHTML = `<div id="fl-obs-panel" style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:8px 12px;background:var(--surface);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:14px">🎥</span>
+          <span style="font-size:12px;font-weight:600;flex:1">Required OBS Scenes</span>
+          <span id="fl-obs-conn" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim)">
+            <span style="width:8px;height:8px;border-radius:50%;background:#555;display:inline-block"></span> OBS
+          </span>
+          <button id="fl-obs-connect-btn" onclick="flQuickConnect()" style="font-size:10px;padding:3px 10px;background:var(--border);color:var(--text);border:none;border-radius:4px;cursor:pointer">Connect</button>
+          <button onclick="flTestScenes()" style="font-size:10px;padding:3px 10px;background:var(--border);color:var(--text);border:none;border-radius:4px;cursor:pointer">Test Scenes</button>
+        </div>
+        <div style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px">
+          ${scenes.map(s => `<span class="fl-scene-tag" data-scene="${esc(s)}" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+            <span class="s-dot" style="width:8px;height:8px;border-radius:50%;background:#555;display:inline-block"></span>
+            ${esc(s)}
+          </span>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    async function flTestScenes() {
+      const scenes = getRequiredScenes();
+      const res = await fetch('/api/obs/test-scenes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes })
+      });
+      const data = await res.json();
+      const conn = document.getElementById('fl-obs-conn');
+      if (conn) {
+        if (data.connected) {
+          conn.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;display:inline-block"></span> Connected';
+          const cb = document.getElementById('fl-obs-connect-btn');
+          if (cb) cb.style.display = 'none';
+        } else {
+          conn.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#e63946;display:inline-block"></span> Not connected';
+          return;
+        }
+      }
+      document.querySelectorAll('.fl-scene-tag').forEach(tag => {
+        const dot = tag.querySelector('.s-dot');
+        if (data.results[tag.dataset.scene]) { dot.style.background = '#2ecc71'; dot.style.boxShadow = '0 0 6px #2ecc71'; }
+        else { dot.style.background = '#e63946'; dot.style.boxShadow = '0 0 6px #e63946'; }
+      });
+    }
+
+    function flQuickConnect() {
+      const s = project && project.settings;
+      if (s && s.obsUrl) {
+        socket.emit('obs:connect', { url: s.obsUrl, password: s.obsPassword });
+        setTimeout(flTestScenes, 2000);
+      } else {
+        const url = prompt('OBS WebSocket URL:', 'ws://localhost:4455');
+        if (!url) return;
+        const pw = prompt('OBS Password (leave blank if none):', '');
+        socket.emit('obs:connect', { url, password: pw });
+        setTimeout(flTestScenes, 2000);
+      }
+    }
 
     function badgeHTML(a) {
       if (a.type === 'layout') {
@@ -258,33 +333,23 @@
         const pointerOnCue = isCurrent && subStep === 'cue';
         const justFired = isCurrent && subStep === 'fired';
 
-        // Step marker
-        html += `<div class="flow-marker ${state}" id="step-${i}">
-          <div class="marker-num">${fired ? '✓' : i + 1}</div>
-          <div class="marker-line"></div>
-        </div>`;
+        // Step marker (minimal divider)
+        html += '<div class="flow-marker ' + state + '" id="step-' + i + '"><div class="marker-line"></div></div>';
 
-        // Text with pointer
-        if (step.text) {
-          html += `<div class="flow-text-wrap ${state} ${pointerOnText ? 'current' : ''}">
-            ${pointerOnText ? '<div class="flow-pointer"></div>' : ''}
-            <div class="flow-text" style="font-size:${fontSize}px">${esc(step.text)}</div>
-          </div>`;
-        }
-
-        // Cue bar
+        // Cue bar (fires before reading the text — sets up visuals)
         if (step.actions.length > 0) {
           const badges = step.actions.map(badgeHTML).join('');
-          html += `<div class="flow-cue ${state} ${pointerOnCue ? 'pointing' : ''} ${justFired ? 'just-fired' : ''}" id="cue-${i}">
-            ${pointerOnCue ? '<div class="flow-pointer"></div>' : ''}
-            <div class="cue-badges">${badges}</div>
-            ${isCurrent ? `
-              <button class="flow-fire-btn ${fired || justFired ? 'fired' : ''}"
-                      onclick="${fired || justFired ? '' : `fireCue(${i})`}">
-                ${fired || justFired ? '✓ Fired' : '▶ Fire'}
-              </button>
-            ` : ''}
-          </div>`;
+          var pointer = pointerOnCue ? '<div class="flow-pointer"></div>' : '';
+          var cueClass = 'flow-cue ' + state + (pointerOnCue ? ' pointing' : '') + (fired ? ' just-fired' : '');
+          html += '<div class="' + cueClass + '" id="cue-' + i + '">' + pointer + '<div class="cue-badges">' + badges + '</div></div>';
+        }
+
+        // Text with pointer (read after actions fire)
+        if (step.text) {
+          var textState = pointerOnText ? 'current' : (state === 'current' ? 'upcoming' : state);
+          var twClass = 'flow-text-wrap ' + textState + (pointerOnText ? ' current' : '');
+          var twPointer = pointerOnText ? '<div class="flow-pointer"></div>' : '';
+          html += '<div class="' + twClass + '">' + twPointer + '<div class="flow-text" style="font-size:' + fontSize + 'px">' + esc(step.text) + '</div></div>';
         }
       });
 
@@ -297,7 +362,11 @@
         scrollTarget = document.getElementById(`cue-${currentStep}`);
       }
       if (!scrollTarget) scrollTarget = document.getElementById(`step-${currentStep}`);
-      if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (scrollTarget) {
+        const rect = scrollTarget.getBoundingClientRect();
+        const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+        if (!inView) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
 
     function fireCue(stepIdx) {
@@ -310,7 +379,16 @@
         });
       }
       firedSteps.add(stepIdx);
-      subStep = 'fired';
+      // If no text, auto-advance to next step
+      if (!step.text) {
+        if (currentStep < script.steps.length - 1) {
+          currentStep++;
+          const nextStep = script.steps[currentStep];
+          subStep = (nextStep && nextStep.actions.length > 0) ? 'cue' : 'text';
+        }
+      } else {
+        subStep = 'text';
+      }
       renderFlow();
     }
 
@@ -319,26 +397,32 @@
       if (!step) return;
       const hasActions = step.actions.length > 0;
 
-      if (subStep === 'text' && hasActions) {
-        // Move pointer down to cue bar
-        subStep = 'cue';
-        renderFlow();
-      } else if (subStep === 'cue') {
+      if (subStep === 'cue') {
         // Fire the cue
         fireCue(currentStep);
-      } else {
-        // 'fired' or 'text' with no actions → advance to next step
+      } else if (subStep === 'fired') {
+        // Move to text after firing
+        subStep = 'text';
+        renderFlow();
+      } else if (subStep === 'text') {
+        // Done reading text → advance to next step
         if (currentStep < script.steps.length - 1) {
           currentStep++;
-          subStep = 'text';
+          // If next step has actions, start on cue; otherwise start on text
+          const nextStep = script.steps[currentStep];
+          subStep = (nextStep && nextStep.actions.length > 0) ? 'cue' : 'text';
           renderFlow();
         }
       }
     }
 
+    function clearAll() {
+      fetch('/api/' + PROJECT_ID + '/clear', { method: 'POST' });
+    }
+
     function resetScript() {
       currentStep = 0;
-      subStep = 'text';
+      subStep = (script && script.steps[0] && script.steps[0].actions.length > 0) ? 'cue' : 'text';
       firedSteps.clear();
       renderFlow();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -368,7 +452,7 @@
       if (s == null) return '';
       const d = document.createElement('div');
       d.textContent = String(s);
-      return d.innerHTML;
+      return d.innerHTML.replace(/`/g, '&#96;').replace(/\$/g, '&#36;');
     }
   </script>
 </body>

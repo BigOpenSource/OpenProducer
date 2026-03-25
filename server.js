@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const OBSWebSocket = require('obs-websocket-js').default;
 const mammoth = require('mammoth');
+const ExcelJS = require('exceljs');
+const AdmZip = require('adm-zip');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,9 +21,33 @@ const PORT = process.env.PORT || 4001;
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+// ─── Job tracking ───────────────────────────────────────────────────────────
+const jobs = new Map(); // projectId -> {id, type, status, message, startedAt}
+app.get('/api/:projectId/jobs', (req, res) => {
+  const job = jobs.get(req.params.projectId);
+  res.json({ job: job || null });
+});
+function setJob(projectId, type, message) {
+  const job = { id: Date.now().toString(), type, status: 'running', message, startedAt: new Date().toISOString() };
+  jobs.set(projectId, job);
+  io.to(projectId).emit('job:update', job);
+  return job;
+}
+function finishJob(projectId, message, error) {
+  const job = jobs.get(projectId);
+  if (job) {
+    job.status = error ? 'error' : 'done';
+    job.message = message;
+    job.finishedAt = new Date().toISOString();
+    io.to(projectId).emit('job:update', job);
+    // Clear after 30s
+    setTimeout(() => { if (jobs.get(projectId) === job) jobs.delete(projectId); }, 30000);
+  }
+}
 
 // ─── Helper: generate short project ID ──────────────────────────────────────
 function shortId() {
@@ -392,6 +418,17 @@ For locked steps, never add media.`;
 
 `;
   if (globalNotes) userPrompt += `Overall context/notes: ${globalNotes}\n\n`;
+
+  // Include episode requirements
+  const { requirements } = req.body;
+  if (requirements && requirements.length) {
+    userPrompt += `Episode-specific details provided by the producer:\n`;
+    requirements.forEach(r => {
+      if (r.value) userPrompt += `- ${r.label}: ${r.value}\n`;
+      if (r.files && r.files.length) userPrompt += `- ${r.label} (files): ${r.files.join(', ')}\n`;
+    });
+    userPrompt += '\n';
+  }
   if (globalMedia && globalMedia.length) userPrompt += `Reference media files: ${globalMedia.join(', ')}\n\n`;
 
   userPrompt += `Steps:\n`;
@@ -579,9 +616,223 @@ app.post('/api/:projectId/generate-media', async (req, res) => {
   res.json({ results });
 });
 
+// ─── JSON repair helper ─────────────────────────────────────────────────────
+function repairJSON(text) {
+  // Extract the JSON portion
+  let json = text;
+  // Try array first, then object
+  const arrMatch = text.match(/\[[\s\S]*/);
+  const objMatch = text.match(/\{[\s\S]*/);
+  if (arrMatch) json = arrMatch[0];
+  else if (objMatch) json = objMatch[0];
+
+  // Try parsing as-is
+  try { return JSON.parse(json); } catch(e) {}
+
+  // Find the last valid closing point and truncate there
+  let lastValid = -1;
+  let depth = 0, inStr = false, escape = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{' || ch === '[') depth++;
+    if (ch === '}' || ch === ']') { depth--; if (depth === 0) lastValid = i; }
+  }
+  if (lastValid > 0) {
+    return JSON.parse(json.slice(0, lastValid + 1));
+  }
+
+  // Fallback: close unclosed brackets
+  let repaired = json.replace(/,\s*$/, '').replace(/,\s*"[^"]*$/, '').replace(/:\s*"[^"]*$/, ': ""');
+  let open = 0, openArr = 0;
+  inStr = false; escape = false;
+  for (const ch of repaired) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') open++; if (ch === '}') open--;
+    if (ch === '[') openArr++; if (ch === ']') openArr--;
+  }
+  while (open > 0) { repaired += '}'; open--; }
+  while (openArr > 0) { repaired += ']'; openArr--; }
+  return JSON.parse(repaired);
+}
+
+// ─── Generate Requirements ──────────────────────────────────────────────────
+app.post('/api/:projectId/generate-requirements', async (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const settings = project.settings || {};
+  if (!settings.anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key not set.' });
+
+  const { stepsDesc, graphicsDesc, formatName } = req.body;
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': settings.anthropicApiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: settings.aiModel || 'claude-opus-4-6',
+        max_tokens: 2048,
+        system: `You analyze broadcast script formats and determine what episode-specific information a producer needs to provide before each episode.
+Return a JSON array of requirement objects: [{"type":"text"|"file"|"url"|"choice", "label":"<descriptive label>"}]
+For choice type, also include "options": "option1, option2, option3"
+Think about what changes per episode: guest names, topics, headlines, images, links, etc.
+Look at update actions with placeholder values — those are things the producer needs to fill in.
+IMPORTANT: Each story/segment that shows visuals likely needs image or video assets. Use type "file" for:
+- Story images/graphics (one per story)
+- B-roll video clips
+- Audio clips or sound effects
+- Guest photos
+Also use type "url" for article links or reference URLs.
+Be practical and thorough. Include both text info AND media assets needed.`,
+        messages: [{ role: 'user', content: `Analyze this broadcast format and list what the producer needs to provide for each episode:\n\nFormat: ${formatName}\n\nSteps:\n${stepsDesc}\n\nAvailable graphics:\n${graphicsDesc}` }]
+      })
+    });
+    const data = await response.json();
+    if (data.error) return res.status(400).json({ error: data.error.message });
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return res.status(500).json({ error: 'Could not parse response' });
+    res.json({ requirements: JSON.parse(match[0]) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Episode Data Export/Import ──────────────────────────────────────────────
+app.post('/api/:projectId/export-requirements', async (req, res) => {
+  const { requirements, scriptName } = req.body;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Episode Requirements');
+
+  // Header row
+  ws.columns = [
+    { header: '#', key: 'num', width: 5 },
+    { header: 'Requirement', key: 'label', width: 40 },
+    { header: 'Type', key: 'type', width: 12 },
+    { header: 'Value', key: 'value', width: 50 },
+    { header: 'File Name', key: 'filename', width: 30 },
+    { header: 'Notes', key: 'notes', width: 40 }
+  ];
+
+  // Style header
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6C5CE7' } };
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+  requirements.forEach((r, i) => {
+    const row = {
+      num: i + 1,
+      label: r.label,
+      type: r.type,
+      value: '',
+      filename: '',
+      notes: ''
+    };
+    if (r.type === 'file') {
+      // Generate expected filename
+      const safeName = r.label.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_').toLowerCase();
+      row.filename = safeName;
+      row.notes = `Place file in media/ folder named: ${safeName}.png (or .jpg, .mp4, .mp3, etc.)`;
+    } else if (r.type === 'choice' && r.options) {
+      row.notes = `Options: ${r.options}`;
+    }
+    ws.addRow(row);
+  });
+
+  // Instructions sheet
+  const is = wb.addWorksheet('Instructions');
+  is.getColumn(1).width = 80;
+  is.addRow(['EPISODE DATA INSTRUCTIONS']);
+  is.getRow(1).font = { bold: true, size: 14 };
+  is.addRow(['']);
+  is.addRow(['1. Fill in the "Value" column for each requirement on the first sheet.']);
+  is.addRow(['2. For file requirements, place your media files in a folder called "media/"']);
+  is.addRow(['3. Name each media file using the "File Name" column value (e.g., story_1_visual_asset.png)']);
+  is.addRow(['4. Supported formats: .png, .jpg, .gif, .webp, .mp4, .webm, .mp3, .wav, .aac']);
+  is.addRow(['5. Save this Excel file, then zip it together with the media/ folder:']);
+  is.addRow(['']);
+  is.addRow(['   episode_data.zip']);
+  is.addRow(['   ├── requirements.xlsx  (this file, filled out)']);
+  is.addRow(['   └── media/']);
+  is.addRow(['       ├── story_1_headline_image.png']);
+  is.addRow(['       ├── story_2_visual_asset.jpg']);
+  is.addRow(['       └── ...']);
+  is.addRow(['']);
+  is.addRow(['6. Upload the zip file using "Import Episode Data" in the Generate Script dialog.']);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const safeName = (scriptName || 'episode').replace(/[^a-zA-Z0-9]/g, '_');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename=${safeName}_requirements.xlsx`);
+  res.send(Buffer.from(buffer));
+});
+
+app.post('/api/:projectId/import-episode-data',
+  express.raw({ type: () => true, limit: '100mb' }),
+  async (req, res) => {
+    try {
+      const zip = new AdmZip(req.body);
+      const entries = zip.getEntries();
+
+      // Find the xlsx file
+      const xlsxEntry = entries.find(e => e.entryName.endsWith('.xlsx') && !e.entryName.startsWith('__MACOSX'));
+      if (!xlsxEntry) return res.status(400).json({ error: 'No .xlsx file found in zip' });
+
+      // Parse xlsx
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(xlsxEntry.getData());
+      const ws = wb.getWorksheet(1);
+
+      const requirements = [];
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) return; // skip header
+        const label = row.getCell(2).value?.toString() || '';
+        const type = row.getCell(3).value?.toString() || 'text';
+        const value = row.getCell(4).value?.toString() || '';
+        const filename = row.getCell(5).value?.toString() || '';
+        if (!label) return;
+        requirements.push({ label, type, value, filename, files: [] });
+      });
+
+      // Process media files from zip
+      for (const req_item of requirements) {
+        if (req_item.type === 'file' && req_item.filename) {
+          // Find matching media files in the zip
+          const matchingEntries = entries.filter(e => {
+            const name = e.entryName.toLowerCase();
+            const target = req_item.filename.toLowerCase();
+            return (name.includes('media/') || name.includes('media\\')) &&
+                   path.basename(name).startsWith(target) &&
+                   !name.startsWith('__MACOSX');
+          });
+          for (const me of matchingEntries) {
+            const data = me.getData();
+            const ext = path.extname(me.entryName) || '.png';
+            const fname = uuidv4().slice(0, 12) + ext;
+            fs.writeFileSync(path.join(UPLOAD_DIR, fname), data);
+            req_item.files.push(`/uploads/${fname}`);
+          }
+          req_item.done = req_item.files.length > 0;
+        } else {
+          req_item.done = !!req_item.value;
+        }
+      }
+
+      res.json({ requirements });
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to process zip: ' + e.message });
+    }
+  }
+);
+
 // ─── Production Document Import ─────────────────────────────────────────────
 app.post('/api/:projectId/import-doc',
-  express.raw({ type: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/octet-stream'], limit: '50mb' }),
+  express.raw({ type: () => true, limit: '50mb' }),
   async (req, res) => {
     try {
       const result = await mammoth.extractRawText({ buffer: req.body });
@@ -597,6 +848,7 @@ app.post('/api/:projectId/generate-layouts-from-doc', async (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
   const settings = project.settings || {};
   if (!settings.anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key not set.' });
+  setJob(req.params.projectId, 'layouts', 'Analyzing document and generating layouts & graphics...');
 
   const { docText } = req.body;
   const existingGraphicTypes = ['lower_third', 'message', 'ticker', 'image', 'timer', 'score'];
@@ -628,14 +880,15 @@ Each layout should have an appropriate OBS scene name suggestion.`;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': settings.anthropicApiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 8192, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
+      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 16384, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
     });
     const data = await response.json();
     if (data.error) return res.status(400).json({ error: data.error.message });
     const text = data.content?.[0]?.text || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'Could not parse AI response' });
-    const result = JSON.parse(match[0]);
+    let result;
+    try { result = repairJSON(text); } catch(e) {
+      return res.status(500).json({ error: 'Could not parse AI response: ' + e.message });
+    }
 
     // Create graphics
     const graphicIdMap = {};
@@ -665,8 +918,11 @@ Each layout should have an appropriate OBS scene name suggestion.`;
 
     saveProject(project);
     io.to(project.id).emit('project:update', project);
-    res.json({ graphicsCreated: result.graphics?.length || 0, layoutsCreated: result.layouts?.length || 0 });
+    const gc = result.graphics?.length || 0, lc = result.layouts?.length || 0;
+    finishJob(req.params.projectId, `Created ${gc} graphics and ${lc} layouts`);
+    res.json({ graphicsCreated: gc, layoutsCreated: lc });
   } catch (e) {
+    finishJob(req.params.projectId, e.message, true);
     res.status(500).json({ error: e.message });
   }
 });
@@ -676,6 +932,7 @@ app.post('/api/:projectId/generate-formats-from-doc', async (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
   const settings = project.settings || {};
   if (!settings.anthropicApiKey) return res.status(400).json({ error: 'Anthropic API key not set.' });
+  setJob(req.params.projectId, 'formats', 'Analyzing document and generating formats...');
 
   const { docText } = req.body;
 
@@ -708,7 +965,8 @@ Return a JSON array of formats:
 
 Create distinct formats for each segment type described in the production document.
 Use layout actions where appropriate. Reference real graphic and layout IDs from the lists above.
-Mark structural steps (like intros/outros with fixed actions) as locked:true.`;
+Mark structural steps (like intros/outros with fixed actions) as locked:true.
+IMPORTANT: Keep defaultText brief (1-2 sentences per step). Keep the total response under 12000 characters.`;
 
   const userPrompt = `Here is the production document:\n\n${docText}\n\nGenerate all script formats needed for this production.`;
 
@@ -716,14 +974,16 @@ Mark structural steps (like intros/outros with fixed actions) as locked:true.`;
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': settings.anthropicApiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 8192, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
+      body: JSON.stringify({ model: settings.aiModel || 'claude-opus-4-6', max_tokens: 16384, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })
     });
     const data = await response.json();
     if (data.error) return res.status(400).json({ error: data.error.message });
     const text = data.content?.[0]?.text || '';
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return res.status(500).json({ error: 'Could not parse AI response' });
-    const formats = JSON.parse(match[0]);
+    let formats;
+    try { formats = repairJSON(text); } catch(e) {
+      return res.status(500).json({ error: 'Could not parse AI response: ' + e.message });
+    }
+    if (!Array.isArray(formats)) formats = formats.formats || [formats];
 
     if (!project.formats) project.formats = [];
     for (const fDef of formats) {
@@ -742,8 +1002,10 @@ Mark structural steps (like intros/outros with fixed actions) as locked:true.`;
 
     saveProject(project);
     io.to(project.id).emit('project:update', project);
+    finishJob(req.params.projectId, `Created ${formats.length} formats`);
     res.json({ formatsCreated: formats.length });
   } catch (e) {
+    finishJob(req.params.projectId, e.message, true);
     res.status(500).json({ error: e.message });
   }
 });
@@ -887,6 +1149,19 @@ app.get('/api/obs/scenes', async (req, res) => {
     const { scenes } = await obs.call('GetSceneList');
     res.json({ scenes: scenes.map(s => s.sceneName) });
   } catch (e) { res.json({ scenes: [], error: e.message }); }
+});
+
+app.post('/api/obs/test-scenes', async (req, res) => {
+  if (!obsConnected) return res.json({ connected: false, results: {} });
+  try {
+    const { scenes: obsScenes } = await obs.call('GetSceneList');
+    const available = new Set(obsScenes.map(s => s.sceneName));
+    const results = {};
+    for (const name of (req.body.scenes || [])) {
+      results[name] = available.has(name);
+    }
+    res.json({ connected: true, results });
+  } catch (e) { res.json({ connected: false, error: e.message, results: {} }); }
 });
 
 app.get('/api/obs/inputs', async (req, res) => {
