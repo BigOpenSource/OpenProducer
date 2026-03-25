@@ -1051,6 +1051,18 @@ app.post('/api/upload',
   }
 );
 
+// ─── Graphic position (REST) ────────────────────────────────────────────────
+app.post('/api/:projectId/graphic/:graphicId/position', (req, res) => {
+  const project = loadProject(req.params.projectId);
+  if (!project) return res.status(404).json({ error: 'Not found' });
+  const g = project.graphics.find(g => g.id === req.params.graphicId);
+  if (!g) return res.status(404).json({ error: 'Graphic not found' });
+  g.position = req.body;
+  saveProject(project);
+  io.to(project.id).emit('graphic:reposition', { graphicId: g.id, position: g.position });
+  res.json({ ok: true });
+});
+
 // ─── Page routes ────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'launcher.html'));
@@ -1198,6 +1210,9 @@ io.on('connection', (socket) => {
     io.to(projectId).emit('project:update', project);
   });
 
+  // Also handle via REST as fallback (iframes may have socket issues)
+  // (REST endpoint is defined above)
+
   socket.on('graphic:position', ({ projectId, graphicId, position }) => {
     const project = loadProject(projectId);
     if (!project) return;
@@ -1205,7 +1220,8 @@ io.on('connection', (socket) => {
     if (!g) return;
     g.position = position;
     saveProject(project);
-    // Don't broadcast full update to avoid re-rendering live graphics
+    // Broadcast position to all other output/preview windows
+    socket.to(projectId).emit('graphic:reposition', { graphicId, position });
   });
 
   socket.on('graphic:cue', ({ projectId, graphicId }) => {
