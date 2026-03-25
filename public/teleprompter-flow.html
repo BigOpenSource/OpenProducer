@@ -130,6 +130,7 @@
     .cue-badge.update { background: rgba(108,92,231,0.15); color: var(--accent); }
     .cue-badge.obs { background: rgba(241,196,15,0.15); color: var(--yellow); }
     .cue-badge.wait { background: rgba(255,255,255,0.08); color: var(--text-dim); font-style: italic; }
+    .cue-badge.layout { background: rgba(108,92,231,0.15); color: #a78bfa; }
 
     .flow-fire-btn {
       padding: 6px 20px; font-size: 13px; font-weight: 700;
@@ -214,6 +215,10 @@
     });
 
     function badgeHTML(a) {
+      if (a.type === 'layout') {
+        const layout = (project.layouts||[]).find(l => l.id === a.layoutId);
+        return `<span class="cue-badge layout">${esc('Layout: ' + (layout ? layout.name : '?'))}</span>`;
+      }
       if (a.type === 'wait') {
         return `<span class="cue-badge wait">Wait ${a.duration || 1}s</span>`;
       }

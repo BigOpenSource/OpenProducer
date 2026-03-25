@@ -82,6 +82,7 @@ function createDefaultProject(name) {
     },
     scripts: [],
     formats: [],
+    layouts: [],
     settings: {
       anthropicApiKey: '',
       aiModel: 'claude-opus-4-6',
@@ -603,10 +604,15 @@ app.post('/api/pick-folder', async (req, res) => {
 
 // ─── File upload ────────────────────────────────────────────────────────────
 app.post('/api/upload',
-  express.raw({ type: 'image/*', limit: '20mb' }),
+  express.raw({ type: ['image/*', 'audio/*', 'video/*'], limit: '50mb' }),
   (req, res) => {
     const contentType = req.headers['content-type'] || '';
-    const ext = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/svg+xml': '.svg' }[contentType] || '.png';
+    const extMap = {
+      'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/svg+xml': '.svg',
+      'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/wav': '.wav', 'audio/ogg': '.ogg', 'audio/aac': '.aac', 'audio/m4a': '.m4a',
+      'video/mp4': '.mp4', 'video/webm': '.webm'
+    };
+    const ext = extMap[contentType] || (contentType.startsWith('audio/') ? '.mp3' : contentType.startsWith('video/') ? '.mp4' : '.png');
     const filename = uuidv4().slice(0, 12) + ext;
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.body);
     res.json({ url: `/uploads/${filename}` });
@@ -775,6 +781,28 @@ io.on('connection', (socket) => {
       if (action.type === 'wait') {
         const ms = Math.max(0, (action.duration || 1)) * 1000;
         await new Promise(resolve => setTimeout(resolve, ms));
+        return;
+      }
+      // Layout
+      if (action.type === 'layout') {
+        const layout = (project.layouts || []).find(l => l.id === action.layoutId);
+        if (!layout) return;
+        // Switch OBS scene
+        if (layout.obsScene && obsConnected) {
+          await obs.call('SetCurrentProgramScene', { sceneName: layout.obsScene }).catch(() => {});
+        }
+        // Show/hide graphics
+        for (const entry of (layout.graphics || [])) {
+          const g = project.graphics.find(g => g.id === entry.graphicId);
+          if (!g) continue;
+          if (entry.visible && !g.isLive) {
+            g.isLive = true; g.isCued = false;
+            io.to(projectId).emit('graphic:show', g);
+          } else if (!entry.visible && g.isLive) {
+            g.isLive = false; g.isCued = false;
+            io.to(projectId).emit('graphic:hide', g);
+          }
+        }
         return;
       }
       // OBS

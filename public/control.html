@@ -231,6 +231,35 @@
       cursor: pointer;
     }
 
+    /* ─── Layouts ──────── */
+    .layout-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .layout-card:hover { border-color: #555; }
+    .layout-header {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      background: var(--surface2); border-bottom: 1px solid var(--border);
+    }
+    .layout-header .layout-name {
+      flex: 1; font-weight: 700; font-size: 14px; cursor: pointer;
+    }
+    .layout-header .layout-name:hover { color: var(--accent); }
+    .layout-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+    .layout-body .fg label { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.4px; }
+    .layout-body select, .layout-body input { font-size: 12px; padding: 5px 8px; }
+    .layout-graphic-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+      background: var(--bg); border-radius: 6px; font-size: 12px;
+    }
+    .layout-graphic-row label { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
+    .layout-preview-btn {
+      padding: 6px 14px; font-size: 12px; font-weight: 600; width: 100%;
+      background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer;
+      margin-top: 4px;
+    }
+    .layout-preview-btn:hover { background: var(--accent-hover); }
+
     /* ─── Scripts ──────── */
     .script-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -321,6 +350,7 @@
 
   <div class="tabs" id="mainTabs">
     <button class="tab active" data-tab="rundown">Rundown</button>
+    <button class="tab" data-tab="layouts">Layouts</button>
     <button class="tab" data-tab="scripts">Scripts</button>
     <button class="tab" data-tab="formats">Formats</button>
     <button class="tab" data-tab="variables">Variables</button>
@@ -353,6 +383,16 @@
         </div>
       </div>
       <div class="rundown-grid" id="rundownGrid"></div>
+    </div>
+
+    <!-- Tab: Layouts -->
+    <div class="tab-content" id="tab-layouts">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>Layouts</h3>
+        <button class="btn-primary" onclick="addLayout()" style="font-size:12px;padding:5px 12px">+ New Layout</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">A layout combines an OBS scene with a set of graphics. Use layouts in scripts to switch entire visual setups at once.</p>
+      <div id="layoutsContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;align-content:start"></div>
     </div>
 
     <!-- Tab: Scripts -->
@@ -592,6 +632,7 @@
       document.getElementById('projectName').textContent = project.name;
       document.getElementById('projectId').textContent = project.id;
       renderRundown();
+      renderLayouts();
       renderVariables();
       renderScripts();
       renderFormats();
@@ -682,12 +723,13 @@
                        oninput="uc('${id}','url',this.value)" placeholder="URL or upload..." style="flex:1">
                 <button class="btn-ghost" style="white-space:nowrap;padding:4px 10px;font-size:12px" onclick="pickImage('${id}')">Upload</button>
               </div></div>
-            ${lib.length ? `<div class="img-library">${lib.map(u =>
-              `<div class="img-thumb ${u === g.content.url ? 'img-active' : ''}" onclick="selectImage('${id}','${esc(u)}')">
-                <img src="${esc(u)}">
+            ${lib.length ? `<div class="img-library">${lib.map(u => {
+              const isAudio = /\.(mp3|wav|ogg|aac|m4a)$/i.test(u);
+              return `<div class="img-thumb ${u === g.content.url ? 'img-active' : ''}" onclick="selectImage('${id}','${esc(u)}')" style="${isAudio ? 'display:flex;align-items:center;justify-content:center;background:var(--surface2);font-size:20px' : ''}">
+                ${isAudio ? '🔊' : `<img src="${esc(u)}">`}
                 <button class="img-remove" onclick="event.stopPropagation(); removeImage('${id}','${esc(u)}')" title="Remove">✕</button>
-              </div>`
-            ).join('')}</div>` : ''}
+              </div>`;
+            }).join('')}</div>` : ''}
             <div class="fg"><label>Sizing</label>
               <select data-gid="${id}" data-field="sizing"
                       onchange="uc('${id}','sizing',this.value)">
@@ -872,7 +914,7 @@
     function pickImage(id) {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
+      input.accept = 'image/*,audio/*';
       input.multiple = true;
       input.onchange = async () => {
         const g = project.graphics.find(g => g.id === id);
@@ -910,6 +952,111 @@
     function adj(id, team, delta) {
       const g = project.graphics.find(g => g.id === id);
       if (g) { g.content[team].score += delta; save(); }
+    }
+
+    // ─── Layouts ──────────────────────────────────────────────────────────
+    function renderLayouts() {
+      if (!project) return;
+      if (!project.layouts) project.layouts = [];
+      const c = document.getElementById('layoutsContainer');
+      if (!c) return;
+      if (project.layouts.length === 0) {
+        c.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:40px;grid-column:1/-1">No layouts yet. Create one to define a visual setup.</div>';
+        return;
+      }
+      c.innerHTML = project.layouts.map((l, li) => `
+        <div class="layout-card">
+          <div class="layout-header">
+            <span style="font-size:18px">🎬</span>
+            <span class="layout-name" onclick="renameLayout(${li})">${esc(l.name)}</span>
+            <button class="btn-ghost" onclick="deleteLayout(${li})" style="color:#666;padding:3px 8px;font-size:12px">✕</button>
+          </div>
+          <div class="layout-body">
+            <div class="fg">
+              <label>OBS Scene</label>
+              <input type="text" value="${esc(l.obsScene||'')}" placeholder="Scene name in OBS"
+                     onchange="updateLayout(${li},'obsScene',this.value)">
+            </div>
+            <div class="fg">
+              <label>Graphics</label>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                ${project.graphics.map(g => {
+                  const entry = (l.graphics||[]).find(e => e.graphicId === g.id);
+                  const checked = entry ? entry.visible : false;
+                  return `<div class="layout-graphic-row">
+                    <label>
+                      <input type="checkbox" ${checked ? 'checked' : ''}
+                             onchange="toggleLayoutGraphic(${li},'${g.id}',this.checked)">
+                      <span>${typeIcon(g.type)}</span>
+                      <span>${esc(g.name)}</span>
+                    </label>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>
+            <button class="layout-preview-btn" onclick="activateLayout(${li})">▶ Activate Layout</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addLayout() {
+      if (!project.layouts) project.layouts = [];
+      project.layouts.push({
+        id: Math.random().toString(36).slice(2, 10).toUpperCase(),
+        name: 'Layout ' + (project.layouts.length + 1),
+        obsScene: '',
+        graphics: []
+      });
+      save();
+    }
+
+    function deleteLayout(li) {
+      if (!confirm('Delete this layout?')) return;
+      project.layouts.splice(li, 1);
+      save();
+    }
+
+    function renameLayout(li) {
+      const n = prompt('Layout name:', project.layouts[li].name);
+      if (n) { project.layouts[li].name = n; save(); }
+    }
+
+    function updateLayout(li, key, val) {
+      project.layouts[li][key] = val;
+      save();
+    }
+
+    function toggleLayoutGraphic(li, graphicId, visible) {
+      const layout = project.layouts[li];
+      if (!layout.graphics) layout.graphics = [];
+      const idx = layout.graphics.findIndex(e => e.graphicId === graphicId);
+      if (idx >= 0) {
+        if (visible) layout.graphics[idx].visible = true;
+        else layout.graphics.splice(idx, 1);
+      } else if (visible) {
+        layout.graphics.push({ graphicId, visible: true });
+      }
+      save();
+    }
+
+    function activateLayout(li) {
+      const layout = project.layouts[li];
+      const actions = [];
+      // OBS scene switch
+      if (layout.obsScene) {
+        actions.push({ type: 'obs', obsAction: 'switch_scene', obsValue: layout.obsScene });
+      }
+      // Show checked graphics, hide unchecked
+      project.graphics.forEach(g => {
+        const entry = (layout.graphics || []).find(e => e.graphicId === g.id);
+        if (entry && entry.visible) {
+          actions.push({ type: 'show', graphicId: g.id });
+        } else if (g.isLive) {
+          actions.push({ type: 'hide', graphicId: g.id });
+        }
+      });
+      socket.emit('script:execute', { projectId: PROJECT_ID, actions });
     }
 
     // ─── Scripts ───────────────────────────────────────────────────────────
@@ -980,6 +1127,7 @@
     function renderAction(a, ai, si, sti, graphicOpts) {
       if (a.type === 'obs') return renderOBSAction(a, ai, si, sti);
       if (a.type === 'wait') return renderWaitAction(a, ai, si, sti);
+      if (a.type === 'layout') return renderLayoutAction(a, ai, si, sti);
       const g = project.graphics.find(g => g.id === a.graphicId);
       let extra = '';
       if (a.type === 'update' && g) {
@@ -999,6 +1147,7 @@
           <option value="update" ${a.type==='update'?'selected':''}>Update</option>
           <option value="obs" ${a.type==='obs'?'selected':''}>OBS</option>
           <option value="wait" ${a.type==='wait'?'selected':''}>Wait</option>
+          <option value="layout" ${a.type==='layout'?'selected':''}>Layout</option>
         </select>
         <select onchange="updateAction(${si},${sti},${ai},'graphicId',this.value)">
           <option value="">Graphic...</option>
@@ -1020,6 +1169,7 @@
           <option value="update">Update</option>
           <option value="obs" selected>OBS</option>
           <option value="wait">Wait</option>
+          <option value="layout">Layout</option>
         </select>
         <select onchange="updateAction(${si},${sti},${ai},'obsAction',this.value)">
           <option value="">Action...</option>
@@ -1056,6 +1206,7 @@
           <option value="update">Update</option>
           <option value="obs">OBS</option>
           <option value="wait" selected>Wait</option>
+          <option value="layout">Layout</option>
         </select>
         <span style="font-size:12px;color:var(--text-dim)">for</span>
         <input type="number" value="${a.duration || 1}" min="0.1" step="0.1" style="width:60px;text-align:center"
@@ -1063,6 +1214,40 @@
         <span style="font-size:12px;color:var(--text-dim)">seconds</span>
         <span style="flex:1"></span>
         <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function layoutOpts(selectedId, onchangePrefix) {
+      const layouts = project.layouts || [];
+      return `<select ${onchangePrefix}>
+        <option value="">Layout...</option>
+        ${layouts.map(l => `<option value="${l.id}" ${l.id===selectedId?'selected':''}>${esc(l.name)}</option>`).join('')}
+      </select>`;
+    }
+
+    function renderLayoutAction(a, ai, si, sti) {
+      return `<div class="step-action" style="border-color:#3a2a5a;background:rgba(108,92,231,0.05)">
+        <select onchange="updateAction(${si},${sti},${ai},'type',this.value)">
+          <option value="show">Show</option><option value="hide">Hide</option><option value="update">Update</option>
+          <option value="obs">OBS</option><option value="wait">Wait</option>
+          <option value="layout" selected>Layout</option>
+        </select>
+        ${layoutOpts(a.layoutId, `onchange="updateAction(${si},${sti},${ai},'layoutId',this.value)"`)}
+        <span style="flex:1"></span>
+        <button class="action-remove" onclick="removeAction(${si},${sti},${ai})">✕</button>
+      </div>`;
+    }
+
+    function renderLayoutActionFmt(a, ai, fi, sti) {
+      return `<div class="step-action" style="border-color:#3a2a5a;background:rgba(108,92,231,0.05)">
+        <select onchange="updateFmtAction(${fi},${sti},${ai},'type',this.value)">
+          <option value="show">Show</option><option value="hide">Hide</option><option value="update">Update</option>
+          <option value="obs">OBS</option><option value="wait">Wait</option>
+          <option value="layout" selected>Layout</option>
+        </select>
+        ${layoutOpts(a.layoutId, `onchange="updateFmtAction(${fi},${sti},${ai},'layoutId',this.value)"`)}
+        <span style="flex:1"></span>
+        <button class="action-remove" onclick="removeFmtAction(${fi},${sti},${ai})">✕</button>
       </div>`;
     }
 
@@ -1222,7 +1407,7 @@
     }
 
     function renderFmtAction(a, ai, fi, sti, graphicOpts) {
-      // Reuse script action renderers but with format update functions
+      if (a.type === 'layout') return renderLayoutActionFmt(a, ai, fi, sti);
       if (a.type === 'wait') {
         return `<div class="step-action" style="border-color:#4a4a00;background:rgba(241,196,15,0.05)">
           <select onchange="updateFmtAction(${fi},${sti},${ai},'type',this.value)">
@@ -1276,6 +1461,7 @@
           <option value="update" ${a.type==='update'?'selected':''}>Update</option>
           <option value="obs" ${a.type==='obs'?'selected':''}>OBS</option>
           <option value="wait" ${a.type==='wait'?'selected':''}>Wait</option>
+          <option value="layout" ${a.type==='layout'?'selected':''}>Layout</option>
         </select>
         <select onchange="updateFmtAction(${fi},${sti},${ai},'graphicId',this.value)">
           <option value="">Graphic...</option>
@@ -1452,6 +1638,10 @@
       });
       // Wait
       actions.push({ id: 'wait', label: 'Wait (delay)', type: 'wait', enabled: true });
+      // Layouts
+      (project.layouts || []).forEach(l => {
+        actions.push({ id: `layout_${l.id}`, label: `Layout: ${l.name}`, type: 'layout', layoutId: l.id, enabled: true });
+      });
       return actions;
     }
 
