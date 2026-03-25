@@ -78,6 +78,10 @@
     .timer-graphic { z-index: 15; }
     .image-graphic { z-index: 5; }
 
+    /* ─── Draggable ──────────────────────────────────────────────────── */
+    .graphic-draggable { cursor: move; }
+    .graphic-draggable:active { cursor: grabbing; }
+
     /* ─── Lower Third ────────────────────────────────────────────────────── */
     .lower_third {
       position: absolute;
@@ -520,16 +524,28 @@
       el.dataset.graphicId = g.id;
       el.dataset.graphicType = g.type;
 
-      // Offset multiple graphics of the same type to prevent overlap
-      const sameType = container.querySelectorAll(`[data-graphic-type="${g.type}"]`);
-      if (sameType.length > 0 && (g.type === 'lower_third' || g.type === 'message')) {
-        const offset = sameType.length;
-        if (g.type === 'lower_third') {
-          el.style.bottom = (80 + offset * 90) + 'px';
-        } else if (g.type === 'message') {
-          el.style.top = (50 + offset * 120) + 'px';
+      // Apply saved position if exists
+      if (g.position && (g.position.x !== undefined || g.position.y !== undefined)) {
+        // Clear CSS defaults and use absolute x/y
+        el.style.top = g.position.y + 'px';
+        el.style.left = g.position.x + 'px';
+        el.style.bottom = 'auto';
+        el.style.right = 'auto';
+        el.style.margin = '0';
+        el.style.inset = 'auto';
+      } else {
+        // Auto-offset for multiple graphics of the same type
+        const sameType = container.querySelectorAll('[data-graphic-type="' + g.type + '"]');
+        if (sameType.length > 0) {
+          const offset = sameType.length;
+          if (g.type === 'lower_third') el.style.bottom = (80 + offset * 90) + 'px';
+          else if (g.type === 'message') el.style.top = (50 + offset * 130) + 'px';
+          else if (g.type === 'score-graphic' || el.classList.contains('score-graphic')) el.style.top = (30 + offset * 110) + 'px';
         }
       }
+
+      // Make draggable in preview/output
+      makeDraggable(el, g.id);
 
       container.appendChild(el);
       liveGraphics.set(g.id, el);
@@ -720,6 +736,52 @@
       const d = document.createElement('div');
       d.textContent = String(s);
       return d.innerHTML;
+    }
+
+    // ─── Drag to reposition ─────────────────────────────────────────────
+    function makeDraggable(el, graphicId) {
+      el.classList.add('graphic-draggable');
+      let startX, startY, origX, origY, dragging = false;
+
+      el.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        e.preventDefault();
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = el.getBoundingClientRect();
+        origX = rect.left;
+        origY = rect.top;
+        el.style.transition = 'none';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newX = origX + dx;
+        const newY = origY + dy;
+        el.style.position = 'absolute';
+        el.style.left = newX + 'px';
+        el.style.top = newY + 'px';
+        el.style.bottom = 'auto';
+        el.style.right = 'auto';
+        el.style.margin = '0';
+        el.style.inset = 'auto';
+      });
+
+      document.addEventListener('mouseup', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        el.style.transition = '';
+        // Save position
+        const rect = el.getBoundingClientRect();
+        socket.emit('graphic:position', {
+          projectId: PROJECT_ID,
+          graphicId: graphicId,
+          position: { x: Math.round(rect.left), y: Math.round(rect.top) }
+        });
+      });
     }
   </script>
 </body>

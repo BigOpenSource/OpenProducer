@@ -1198,6 +1198,16 @@ io.on('connection', (socket) => {
     io.to(projectId).emit('project:update', project);
   });
 
+  socket.on('graphic:position', ({ projectId, graphicId, position }) => {
+    const project = loadProject(projectId);
+    if (!project) return;
+    const g = project.graphics.find(g => g.id === graphicId);
+    if (!g) return;
+    g.position = position;
+    saveProject(project);
+    // Don't broadcast full update to avoid re-rendering live graphics
+  });
+
   socket.on('graphic:cue', ({ projectId, graphicId }) => {
     const project = loadProject(projectId);
     if (!project) return;
