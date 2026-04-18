@@ -77,6 +77,7 @@
     .message { z-index: 40; }
     .timer-graphic { z-index: 15; }
     .image-graphic { z-index: 5; }
+    .agenda { z-index: 18; }
 
     /* ─── Draggable ──────────────────────────────────────────────────── */
     .graphic-draggable { cursor: move; }
@@ -84,15 +85,16 @@
 
     /* ─── Lower Third ────────────────────────────────────────────────────── */
     .lower_third {
+      --scale: 1.25;
       position: absolute;
       bottom: 80px;
       left: 60px;
       display: flex;
       flex-direction: column;
-      max-width: 700px;
+      max-width: calc(700px * var(--scale));
     }
     .lower_third .lt-bar {
-      height: 4px;
+      height: calc(4px * var(--scale));
       background: var(--primary);
       border-radius: 2px 2px 0 0;
       animation: expandWidth 0.4s ease forwards;
@@ -100,21 +102,21 @@
     .lower_third .lt-body {
       background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
       backdrop-filter: blur(12px);
-      padding: 16px 28px;
+      padding: calc(16px * var(--scale)) calc(28px * var(--scale));
       border-radius: 0 0 6px 6px;
       border-left: 4px solid var(--primary);
     }
     .lower_third .lt-title {
-      font-size: 32px;
+      font-size: calc(32px * var(--scale));
       font-weight: 700;
       line-height: 1.2;
       text-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .lower_third .lt-subtitle {
-      font-size: 20px;
+      font-size: calc(20px * var(--scale));
       font-weight: 400;
       opacity: 0.85;
-      margin-top: 4px;
+      margin-top: calc(4px * var(--scale));
     }
     .lower_third.graphic-show { animation: slideInLeft 0.5s ease forwards; }
     .lower_third.graphic-hide { animation: slideOutLeft 0.4s ease forwards; }
@@ -217,6 +219,154 @@
     .ticker.graphic-show { animation: slideInUp 0.4s ease forwards; }
     .ticker.graphic-hide { animation: slideOutDown 0.3s ease forwards; }
 
+    /* ─── Agenda ─────────────────────────────────────────────────────────── */
+    .agenda {
+      --scale: 1.25;
+      position: absolute;
+      top: 80px;
+      left: 60px;
+      max-width: calc(520px * var(--scale));
+      /* Smoothly float to the solo slot (and back) when the position changes */
+      transition: top 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+                  left 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+                  bottom 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+                  right 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+                  max-width 0.45s ease;
+    }
+    .agenda .agenda-body {
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
+      backdrop-filter: blur(12px);
+      padding: calc(24px * var(--scale)) calc(32px * var(--scale));
+      border-radius: 8px;
+      border-left: 4px solid var(--primary);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transition: background 0.45s ease, padding 0.45s ease, border-left-color 0.45s ease, box-shadow 0.45s ease, backdrop-filter 0.45s ease;
+    }
+    .agenda .agenda-title {
+      font-size: calc(22px * var(--scale));
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--primary);
+      padding-bottom: calc(12px * var(--scale));
+      margin-bottom: calc(16px * var(--scale));
+      border-bottom: 2px solid rgba(255,255,255,0.1);
+      max-height: calc(100px * var(--scale));
+      overflow: hidden;
+      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease, border-color 0.35s ease;
+    }
+    .agenda .agenda-list {
+      list-style: none;
+      counter-reset: agenda;
+      display: flex;
+      flex-direction: column;
+      gap: calc(2px * var(--scale));
+      padding: 0;
+      margin: 0;
+    }
+    .agenda .agenda-item {
+      counter-increment: agenda;
+      font-size: calc(22px * var(--scale));
+      font-weight: 600;
+      line-height: 1.3;
+      display: flex;
+      align-items: baseline;
+      gap: calc(14px * var(--scale));
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      padding: calc(4px * var(--scale)) calc(12px * var(--scale));
+      border-radius: 6px;
+      max-height: calc(120px * var(--scale));
+      overflow: hidden;
+      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease, font-size 0.45s ease, background 0.35s ease, color 0.35s ease, border-radius 0.35s ease, box-shadow 0.45s ease, gap 0.45s ease;
+    }
+    .agenda .agenda-item::before {
+      content: counter(agenda) ".";
+      color: var(--primary);
+      font-weight: 700;
+      min-width: calc(28px * var(--scale));
+      flex-shrink: 0;
+      transition: min-width 0.45s ease, opacity 0.35s ease, color 0.35s ease;
+    }
+    .agenda .agenda-sub {
+      font-size: calc(17px * var(--scale));
+      font-weight: 400;
+      line-height: 1.3;
+      opacity: 0.78;
+      margin-left: calc(42px * var(--scale));
+      display: flex;
+      align-items: baseline;
+      gap: calc(10px * var(--scale));
+      padding: calc(2px * var(--scale)) calc(12px * var(--scale));
+      border-radius: 6px;
+      max-height: calc(120px * var(--scale));
+      overflow: hidden;
+      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease;
+    }
+    .agenda .agenda-sub::before {
+      content: '–';
+      color: var(--primary);
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+    .agenda .agenda-current {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: inset 0 0 0 transparent, 0 4px 16px rgba(0,0,0,0.35);
+    }
+    .agenda .agenda-current::before {
+      color: #fff;
+    }
+    .agenda.has-current .agenda-item:not(.agenda-current),
+    .agenda.has-current .agenda-sub:not(.agenda-current-sub) {
+      opacity: 0.45;
+    }
+    .agenda .agenda-current-sub {
+      opacity: 1;
+    }
+    /* Solo mode: hide everything except the current main item, morph it into a lower-third */
+    .agenda.solo .agenda-title {
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      border-bottom-color: transparent;
+    }
+    .agenda.solo .agenda-item:not(.agenda-current),
+    .agenda.solo .agenda-sub {
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    .agenda.solo .agenda-body {
+      background: transparent;
+      backdrop-filter: none;
+      border-left-color: transparent;
+      padding: 0;
+      box-shadow: none;
+    }
+    .agenda.solo .agenda-current {
+      font-size: calc(32px * var(--scale));
+      font-weight: 700;
+      gap: 0;
+      padding: calc(16px * var(--scale)) calc(28px * var(--scale));
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
+      color: #fff;
+      border-radius: 0 6px 6px 0;
+      box-shadow: inset calc(4px * var(--scale)) 0 0 var(--primary), 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .agenda.solo .agenda-current::before {
+      min-width: 0;
+      opacity: 0;
+      color: transparent;
+    }
+    .agenda.graphic-show { animation: slideInLeft 0.5s ease forwards; }
+    .agenda.graphic-hide { animation: slideOutLeft 0.4s ease forwards; }
+
     /* ─── Image ──────────────────────────────────────────────────────────── */
     .image-graphic {
       position: absolute;
@@ -236,6 +386,7 @@
 
     /* ─── Timer ──────────────────────────────────────────────────────────── */
     .timer-graphic {
+      --scale: 1.25;
       position: absolute;
       inset: 0;
       margin: auto;
@@ -244,15 +395,15 @@
       text-align: center;
     }
     .timer-graphic .timer-label {
-      font-size: 24px;
+      font-size: calc(24px * var(--scale));
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 2px;
       opacity: 0.8;
-      margin-bottom: 8px;
+      margin-bottom: calc(8px * var(--scale));
     }
     .timer-graphic .timer-display {
-      font-size: 120px;
+      font-size: calc(120px * var(--scale));
       font-weight: 700;
       font-variant-numeric: tabular-nums;
       text-shadow: 0 4px 20px rgba(0,0,0,0.4);
@@ -265,7 +416,7 @@
     .timer-graphic .timer-bg {
       background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.9));
       backdrop-filter: blur(12px);
-      padding: 30px 60px;
+      padding: calc(30px * var(--scale)) calc(60px * var(--scale));
       border-radius: 16px;
       border: 2px solid rgba(255,255,255,0.1);
     }
@@ -389,9 +540,13 @@
       if (liveGraphics.has(g.id)) updateGraphicContent(g);
     });
 
-    socket.on('graphic:reposition', ({ graphicId, position }) => {
+    socket.on('graphic:reposition', ({ graphicId, position, slot }) => {
       const el = liveGraphics.get(graphicId);
-      if (el && position) applyPosition(el, position.x, position.y);
+      if (!el || !position) return;
+      // Only apply if the broadcast slot matches the element's currently displayed mode.
+      const elSlot = el.classList.contains('solo') ? 'solo' : null;
+      const eventSlot = slot === 'solo' ? 'solo' : null;
+      if (elSlot === eventSlot) applyPosition(el, position.x, position.y);
     });
 
     socket.on('timer:action', ({ id, action, seconds }) => {
@@ -455,15 +610,22 @@
       let el;
 
       switch (g.type) {
-        case 'lower_third':
+        case 'lower_third': {
+          const ltItems = g.content.items || (g.content.title != null
+            ? [{title: g.content.title, subtitle: g.content.subtitle || ''}]
+            : []);
+          const ltCur = g.content.current || 1;
+          const ltItem = ltItems[ltCur - 1] || {title: '', subtitle: ''};
           el = createElement('div', `lower_third graphic-show`, `
             <div class="lt-bar"></div>
             <div class="lt-body">
-              <div class="lt-title">${esc(replaceVars(g.content.title))}</div>
-              <div class="lt-subtitle">${esc(replaceVars(g.content.subtitle))}</div>
+              <div class="lt-title">${esc(replaceVars(ltItem.title))}</div>
+              <div class="lt-subtitle">${esc(replaceVars(ltItem.subtitle))}</div>
             </div>
           `);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
+        }
 
         case 'message':
           el = createElement('div', `message graphic-show`, `
@@ -488,11 +650,39 @@
           `);
           break;
 
+        case 'agenda': {
+          const title = g.content.title || '';
+          const titleHtml = title ? `<div class="agenda-title">${esc(replaceVars(title))}</div>` : '';
+          const cur = g.content.currentItem || 0;
+          const solo = !!g.content.solo;
+          let cls = 'agenda graphic-show';
+          if (cur) cls += ' has-current';
+          if (solo) cls += ' solo';
+          el = createElement('div', cls, `
+            <div class="agenda-body">
+              ${titleHtml}
+              <ul class="agenda-list">${renderAgendaItems(g.content.items, cur)}</ul>
+            </div>
+          `);
+          el.style.setProperty('--scale', pctScale(agendaActiveSize(g)));
+          break;
+        }
+
         case 'image':
           el = createElement('div', `image-graphic graphic-show`, `
             <img src="${esc(replaceVars(g.content.url))}" style="object-fit:${g.content.sizing}" onerror="this.style.display='none'">
           `);
           break;
+
+        case 'image_gallery': {
+          const gImgs = g.content.images || [];
+          const gCur = g.content.current || 0;
+          const gUrl = (gCur > 0 && gImgs[gCur - 1]) ? gImgs[gCur - 1] : '';
+          el = createElement('div', `image-graphic graphic-show`, `
+            <img src="${esc(replaceVars(gUrl))}" style="object-fit:${g.content.sizing || 'contain'}; ${gUrl ? '' : 'display:none;'}" onerror="this.style.display='none'">
+          `);
+          break;
+        }
 
         case 'timer': {
           const initSec = g.content.mode === 'countup' ? 0
@@ -505,6 +695,7 @@
               <div class="timer-display" id="timer-${g.id}">${initDisplay}</div>
             </div>
           `);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
         }
 
@@ -529,9 +720,10 @@
       el.dataset.graphicId = g.id;
       el.dataset.graphicType = g.type;
 
-      // Apply saved position if exists
-      if (g.position && g.position.x != null && g.position.y != null) {
-        applyPosition(el, g.position.x, g.position.y);
+      // Apply saved position if exists (per active slot for agenda solo mode)
+      const activePos = getActivePosition(g);
+      if (activePos && activePos.x != null && activePos.y != null) {
+        applyPosition(el, activePos.x, activePos.y);
       } else {
         // Auto-offset for multiple graphics of the same type
         const sameType = container.querySelectorAll('[data-graphic-type="' + g.type + '"]');
@@ -596,10 +788,17 @@
       if (!el) return;
 
       switch (g.type) {
-        case 'lower_third':
-          el.querySelector('.lt-title').textContent = replaceVars(g.content.title);
-          el.querySelector('.lt-subtitle').textContent = replaceVars(g.content.subtitle);
+        case 'lower_third': {
+          const ltItems = g.content.items || (g.content.title != null
+            ? [{title: g.content.title, subtitle: g.content.subtitle || ''}]
+            : []);
+          const ltCur = g.content.current || 1;
+          const ltItem = ltItems[ltCur - 1] || {title: '', subtitle: ''};
+          el.querySelector('.lt-title').textContent = replaceVars(ltItem.title);
+          el.querySelector('.lt-subtitle').textContent = replaceVars(ltItem.subtitle);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
+        }
         case 'message':
           el.querySelector('.msg-text').textContent = replaceVars(g.content.text);
           el.querySelector('.msg-detail').textContent = replaceVars(g.content.detail);
@@ -630,12 +829,63 @@
           }
           break;
         }
+        case 'agenda': {
+          const title = g.content.title || '';
+          const body = el.querySelector('.agenda-body');
+          if (body) {
+            let titleEl = body.querySelector('.agenda-title');
+            if (title && !titleEl) {
+              titleEl = document.createElement('div');
+              titleEl.className = 'agenda-title';
+              body.insertBefore(titleEl, body.firstChild);
+            } else if (!title && titleEl) {
+              titleEl.remove();
+            }
+            if (titleEl) titleEl.textContent = replaceVars(title);
+          }
+          const cur = g.content.currentItem || 0;
+          el.classList.toggle('has-current', !!cur);
+          const wasSolo = el.classList.contains('solo');
+          const isSolo = !!g.content.solo;
+          el.classList.toggle('solo', isSolo);
+          if (isSolo !== wasSolo) {
+            // Mode switched — apply the position saved for the new slot, or clear to CSS default
+            const activePos = getActivePosition(g);
+            if (activePos && activePos.x != null && activePos.y != null) {
+              applyPosition(el, activePos.x, activePos.y);
+            } else {
+              clearInlinePosition(el);
+            }
+          }
+          const list = el.querySelector('.agenda-list');
+          if (list) list.innerHTML = renderAgendaItems(g.content.items, cur);
+          el.style.setProperty('--scale', pctScale(agendaActiveSize(g)));
+          break;
+        }
         case 'image': {
           const img = el.querySelector('img');
           if (img) {
             img.src = replaceVars(g.content.url);
             img.style.objectFit = g.content.sizing;
           }
+          break;
+        }
+        case 'image_gallery': {
+          const gImgs = g.content.images || [];
+          const gCur = g.content.current || 0;
+          const gUrl = (gCur > 0 && gImgs[gCur - 1]) ? gImgs[gCur - 1] : '';
+          const img = el.querySelector('img');
+          if (img) {
+            if (gUrl) { img.src = replaceVars(gUrl); img.style.display = ''; }
+            else { img.style.display = 'none'; }
+            img.style.objectFit = g.content.sizing || 'contain';
+          }
+          break;
+        }
+        case 'timer': {
+          const labelEl = el.querySelector('.timer-label');
+          if (labelEl) labelEl.textContent = replaceVars(g.content.label);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
         }
       }
@@ -737,14 +987,54 @@
       return d.innerHTML;
     }
 
+    function renderAgendaItems(items, current) {
+      let mainIdx = 0;
+      let inCurrent = false;
+      return (items || []).map(line => {
+        const trimmed = String(line).trim();
+        if (trimmed.startsWith('-')) {
+          const text = trimmed.slice(1).trim();
+          const cls = inCurrent ? 'agenda-sub agenda-current-sub' : 'agenda-sub';
+          return `<li class="${cls}">${esc(replaceVars(text))}</li>`;
+        }
+        mainIdx++;
+        inCurrent = (current && mainIdx === current);
+        const cls = inCurrent ? 'agenda-item agenda-current' : 'agenda-item';
+        return `<li class="${cls}">${esc(replaceVars(line))}</li>`;
+      }).join('');
+    }
+
+    function pctScale(size) {
+      const s = (size != null ? size : 50);
+      return s / 40;
+    }
+    function agendaActiveSize(g) {
+      if (!g.content) return 50;
+      if (g.content.solo) return g.content.sizeSolo != null ? g.content.sizeSolo : g.content.size;
+      return g.content.size;
+    }
+
     // ─── Drag to reposition ─────────────────────────────────────────────
     function applyPosition(el, x, y) {
       el.style.cssText += '; position:absolute; inset:auto; left:' + x + 'px; top:' + y + 'px; bottom:auto; right:auto; margin:0;';
     }
+    function clearInlinePosition(el) {
+      el.style.left = '';
+      el.style.top = '';
+      el.style.bottom = '';
+      el.style.right = '';
+      el.style.inset = '';
+      el.style.margin = '';
+      el.style.position = '';
+    }
+    function getActivePosition(g) {
+      if (g.type === 'agenda' && g.content && g.content.solo) return g.positionSolo;
+      return g.position;
+    }
 
     function makeDraggable(el, graphicId) {
       el.classList.add('graphic-draggable');
-      let startMouseX, startMouseY, startElX, startElY, dragging = false;
+      let startMouseX, startMouseY, startElX, startElY, dragging = false, dragSlot = null;
 
       el.addEventListener('mousedown', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
@@ -755,6 +1045,8 @@
         // Always use offsetLeft/offsetTop — works regardless of CSS positioning mode
         startElX = el.offsetLeft;
         startElY = el.offsetTop;
+        // Lock the slot at drag-start so a class change mid-drag doesn't redirect the save
+        dragSlot = el.classList.contains('solo') ? 'solo' : null;
         applyPosition(el, startElX, startElY);
         el.style.transition = 'none';
       });
@@ -777,7 +1069,7 @@
         fetch('/api/' + PROJECT_ID + '/graphic/' + graphicId + '/position', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x, y })
+          body: JSON.stringify({ x, y, slot: dragSlot })
         });
       });
     }

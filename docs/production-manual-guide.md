@@ -68,7 +68,7 @@ Title Card | Full-frame graphic | No camera inputs | Transitions, intro/outro
 | Field | Description |
 |-------|-------------|
 | **Name** | Unique identifier (e.g., "host_lower_third") |
-| **Type** | lower_third, message, ticker, image, timer, score |
+| **Type** | lower_third, message, ticker, agenda, image, timer, score |
 | **Visual Description** | Colors, position, size, transparency |
 | **Content Fields** | What text/data it displays and what changes per episode |
 | **Behavior** | When it appears, how long, how it's triggered |
@@ -91,6 +91,11 @@ TICKER
 - Items: [list of scrolling text items]
 - Speed: pixels per second
 - Position: bottom of frame
+
+AGENDA
+- Title: [optional heading, e.g. "AGENDA" or "TODAY'S SHOW"]
+- Items: [list, one per line; prefix a line with `-` to make it an indented sub-item]
+- Position: left side panel
 
 IMAGE
 - URL/file reference
@@ -239,7 +244,7 @@ Helps the AI understand constraints when generating scripts:
 - **Use tables** wherever possible — they parse much more reliably than paragraphs
 - **Use consistent naming** — if you call it "Scene 2" in one place, don't call it "Screen Share Layout" in another without linking them
 - **Use `[Placeholders]`** in brackets for content that changes per episode
-- **State graphic types explicitly** using the supported types: lower_third, message, ticker, image, timer, score
+- **State graphic types explicitly** using the supported types: lower_third, message, ticker, agenda, image, timer, score
 - **Number your scenes** and give them names (Scene 1: "The Brew", Scene 2: "The Work")
 - **Describe production actions as verbs** — "Show lower_third", "Hide story_card", "Switch to Scene 2", "Play intro beat"
 - **Separate fixed vs. variable** — clearly distinguish what stays the same vs. what changes per episode

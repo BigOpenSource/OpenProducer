@@ -851,16 +851,18 @@ app.post('/api/:projectId/generate-layouts-from-doc', async (req, res) => {
   setJob(req.params.projectId, 'layouts', 'Analyzing document and generating layouts & graphics...');
 
   const { docText } = req.body;
-  const existingGraphicTypes = ['lower_third', 'message', 'ticker', 'image', 'timer', 'score'];
+  const existingGraphicTypes = ['lower_third', 'message', 'ticker', 'agenda', 'image', 'image_gallery', 'timer', 'score'];
 
   const systemPrompt = `You are a broadcast production designer. Analyze a production document and create layouts and graphics for a live broadcast.
 
 A layout combines an OBS scene (camera/video background) with overlay graphics shown on top.
 Available graphic types: ${existingGraphicTypes.join(', ')}
-- lower_third: name + subtitle bar (content: {title, subtitle})
+- lower_third: name + subtitle bar with switchable presets (content: {items:[{title, subtitle}], current:1, size:50}). current is 1-indexed.
 - message: alert/banner (content: {text, detail})
 - ticker: scrolling text (content: {items:[], speed:60})
+- agenda: itemized list/agenda panel (content: {title:'Agenda', items:[], size:50}). Items are one per line; lines starting with "-" are sub-items rendered indented under the previous main item. size is the visual size in percent (20–100, default 50).
 - image: display image (content: {url:'', sizing:'contain', library:[]})
+- image_gallery: switchable gallery of images (content: {images:[], current:0, sizing:'contain'}). current is 1-indexed; 0 = none shown.
 - timer: countdown/clock (content: {mode:'countdown', duration:300, format:'mm:ss', label:''})
 - score: scoreboard (content: {team1:{name,score:0,color:'#e63946'}, team2:{name,score:0,color:'#1d3557'}})
 
@@ -1057,9 +1059,12 @@ app.post('/api/:projectId/graphic/:graphicId/position', (req, res) => {
   if (!project) return res.status(404).json({ error: 'Not found' });
   const g = project.graphics.find(g => g.id === req.params.graphicId);
   if (!g) return res.status(404).json({ error: 'Graphic not found' });
-  g.position = req.body;
+  const { x, y, slot } = req.body;
+  const position = { x, y };
+  if (slot === 'solo') g.positionSolo = position;
+  else g.position = position;
   saveProject(project);
-  io.to(project.id).emit('graphic:reposition', { graphicId: g.id, position: g.position });
+  io.to(project.id).emit('graphic:reposition', { graphicId: g.id, position, slot: slot || null });
   res.json({ ok: true });
 });
 
@@ -1213,15 +1218,16 @@ io.on('connection', (socket) => {
   // Also handle via REST as fallback (iframes may have socket issues)
   // (REST endpoint is defined above)
 
-  socket.on('graphic:position', ({ projectId, graphicId, position }) => {
+  socket.on('graphic:position', ({ projectId, graphicId, position, slot }) => {
     const project = loadProject(projectId);
     if (!project) return;
     const g = project.graphics.find(g => g.id === graphicId);
     if (!g) return;
-    g.position = position;
+    if (slot === 'solo') g.positionSolo = position;
+    else g.position = position;
     saveProject(project);
     // Broadcast position to all other output/preview windows
-    socket.to(projectId).emit('graphic:reposition', { graphicId, position });
+    socket.to(projectId).emit('graphic:reposition', { graphicId, position, slot: slot || null });
   });
 
   socket.on('graphic:cue', ({ projectId, graphicId }) => {
@@ -1318,15 +1324,19 @@ io.on('connection', (socket) => {
 function getDefaultContent(type) {
   switch (type) {
     case 'lower_third':
-      return { title: 'Name', subtitle: 'Title / Company' };
+      return { items: [{ title: 'Name', subtitle: 'Title / Company' }], current: 1, size: 50 };
     case 'message':
       return { text: 'Breaking News', detail: 'Details here...' };
     case 'ticker':
       return { items: ['Item 1', 'Item 2', 'Item 3'], speed: 60 };
+    case 'agenda':
+      return { title: 'Agenda', items: ['Welcome', 'Main Topic', '- Key points', '- Discussion', 'Q&A'], size: 50, sizeSolo: 50, currentItem: 0, solo: false };
     case 'image':
       return { url: '', sizing: 'contain', library: [] };
+    case 'image_gallery':
+      return { images: [], current: 0, sizing: 'contain' };
     case 'timer':
-      return { mode: 'countdown', duration: 300, format: 'mm:ss', label: 'Timer' };
+      return { mode: 'countdown', duration: 300, format: 'mm:ss', label: 'Timer', size: 50 };
     case 'score':
       return {
         team1: { name: 'Team A', score: 0, color: '#e63946' },

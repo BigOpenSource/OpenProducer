@@ -161,6 +161,52 @@
       line-height: 1;
     }
     .img-thumb:hover .img-remove { display: flex; }
+    .img-thumb .img-num {
+      position: absolute; bottom: 2px; left: 4px;
+      background: rgba(0,0,0,0.75); color: #fff;
+      font-size: 10px; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px;
+      pointer-events: none; line-height: 1.3;
+    }
+    /* Lower-third multi-item rows */
+    .lt-item-row {
+      background: rgba(0,0,0,0.18);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin: 6px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-left: 2px solid transparent;
+    }
+    .lt-item-row.lt-item-active {
+      border-left-color: var(--accent);
+      background: rgba(108,92,231,0.10);
+    }
+    .lt-item-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .lt-item-num {
+      font-size: 10px; font-weight: 700; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .lt-item-row.lt-item-active .lt-item-num { color: var(--accent); }
+    .lt-item-remove {
+      background: transparent; color: var(--text-dim); border: none;
+      font-size: 13px; padding: 2px 8px; cursor: pointer;
+      border-radius: 3px; line-height: 1;
+    }
+    .lt-item-remove:hover { color: var(--red); background: rgba(230,57,70,0.1); }
+    .lt-items-scroll {
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+      margin: 4px 0;
+    }
+    .lt-items-scroll::-webkit-scrollbar { width: 6px; }
+    .lt-items-scroll::-webkit-scrollbar-track { background: transparent; }
+    .lt-items-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .lt-items-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
     .gcard-body .fg label {
       font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
       color: var(--text-dim); font-weight: 500;
@@ -365,7 +411,9 @@
         <button class="graphic-type-btn" onclick="addGraphic('lower_third')"><span class="icon">▬</span> Lower Third</button>
         <button class="graphic-type-btn" onclick="addGraphic('message')"><span class="icon">💬</span> Message</button>
         <button class="graphic-type-btn" onclick="addGraphic('ticker')"><span class="icon">↔</span> Ticker</button>
+        <button class="graphic-type-btn" onclick="addGraphic('agenda')"><span class="icon">📋</span> Agenda</button>
         <button class="graphic-type-btn" onclick="addGraphic('image')"><span class="icon">🖼</span> Image</button>
+        <button class="graphic-type-btn" onclick="addGraphic('image_gallery')"><span class="icon">🎞</span> Image Gallery</button>
         <button class="graphic-type-btn" onclick="addGraphic('timer')"><span class="icon">⏱</span> Timer</button>
         <button class="graphic-type-btn" onclick="addGraphic('score')"><span class="icon">⚽</span> Scoreboard</button>
       </div>
@@ -758,14 +806,44 @@
     function renderCardBody(g) {
       const id = g.id;
       switch (g.type) {
-        case 'lower_third':
+        case 'lower_third': {
+          const ltSize = g.content.size != null ? g.content.size : 50;
+          const ltItems = g.content.items || (g.content.title != null
+            ? [{title: g.content.title, subtitle: g.content.subtitle || ''}]
+            : [{title: '', subtitle: ''}]);
+          const ltCur = g.content.current || 1;
+          let ltCurOpts = '';
+          ltItems.forEach((it, i) => {
+            const n = i + 1;
+            const label = (it.title || '').slice(0, 28) || `Item ${n}`;
+            ltCurOpts += `<option value="${n}" ${ltCur === n ? 'selected' : ''}>${n}: ${esc(label)}</option>`;
+          });
+          const ltRows = ltItems.map((it, i) => `
+            <div class="lt-item-row ${ltCur === i+1 ? 'lt-item-active' : ''}">
+              <div class="lt-item-header">
+                <span class="lt-item-num">Item ${i+1}${ltCur === i+1 ? ' · current' : ''}</span>
+                ${ltItems.length > 1 ? `<button class="lt-item-remove" onclick="removeLtItem('${id}',${i})" title="Remove">✕</button>` : ''}
+              </div>
+              <div class="fg"><label>Title</label>
+                <input type="text" value="${esc(it.title || '')}" data-gid="${id}" data-field="items.${i}.title"
+                       oninput="ucItem('${id}',${i},'title',this.value)"></div>
+              <div class="fg"><label>Subtitle</label>
+                <input type="text" value="${esc(it.subtitle || '')}" data-gid="${id}" data-field="items.${i}.subtitle"
+                       oninput="ucItem('${id}',${i},'subtitle',this.value)"></div>
+            </div>
+          `).join('');
           return `
-            <div class="fg"><label>Title</label>
-              <input type="text" value="${esc(g.content.title)}" data-gid="${id}" data-field="title"
-                     oninput="uc('${id}','title',this.value)"></div>
-            <div class="fg"><label>Subtitle</label>
-              <input type="text" value="${esc(g.content.subtitle)}" data-gid="${id}" data-field="subtitle"
-                     oninput="uc('${id}','subtitle',this.value)"></div>`;
+            <div class="row" style="align-items:flex-end;gap:8px">
+              <div class="fg" style="flex:1"><label>Current</label>
+                <select data-gid="${id}" data-field="current"
+                        onchange="uc('${id}','current',+this.value)">${ltCurOpts}</select></div>
+              <button class="btn-ghost" style="padding:6px 10px;font-size:12px" onclick="addLtItem('${id}')">+ Add</button>
+            </div>
+            <div class="lt-items-scroll">${ltRows}</div>
+            <div class="fg"><label>Size: <span id="lt-size-${id}">${ltSize}</span>%</label>
+              <input type="range" min="20" max="100" step="5" value="${ltSize}" data-gid="${id}" data-field="size"
+                     oninput="document.getElementById('lt-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>`;
+        }
 
         case 'message':
           return `
@@ -784,6 +862,40 @@
             <div class="fg"><label>Speed (px/s)</label>
               <input type="number" value="${g.content.speed}" data-gid="${id}" data-field="speed"
                      oninput="uc('${id}','speed',+this.value)"></div>`;
+
+        case 'agenda': {
+          const aItems = g.content.items || [];
+          const aCurrent = g.content.currentItem || 0;
+          const aSolo = !!g.content.solo;
+          const aSizeKey = aSolo ? 'sizeSolo' : 'size';
+          const aSizeVal = g.content[aSizeKey] != null ? g.content[aSizeKey] : 50;
+          const mainCount = aItems.filter(l => !String(l).trim().startsWith('-')).length;
+          let curOpts = `<option value="0" ${aCurrent === 0 ? 'selected' : ''}>None</option>`;
+          for (let i = 1; i <= mainCount; i++) {
+            curOpts += `<option value="${i}" ${aCurrent === i ? 'selected' : ''}>${i}</option>`;
+          }
+          return `
+            <div class="fg"><label>Title</label>
+              <input type="text" value="${esc(g.content.title || '')}" data-gid="${id}" data-field="title"
+                     oninput="uc('${id}','title',this.value)"></div>
+            <div class="fg"><label>Items (one per line, prefix with - for sub-item)</label>
+              <textarea rows="6" data-gid="${id}" data-field="items"
+                        oninput="uc('${id}','items',this.value.split('\\n').filter(Boolean))">${aItems.join('\n')}</textarea></div>
+            <div class="row" style="align-items:flex-end;gap:8px">
+              <div class="fg" style="flex:1"><label>Current Item</label>
+                <select data-gid="${id}" data-field="currentItem"
+                        onchange="uc('${id}','currentItem',+this.value)">${curOpts}</select></div>
+              <button class="btn-ghost"
+                      onclick="uc('${id}','solo',${!aSolo})"
+                      style="padding:6px 12px;font-size:12px;${aSolo ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}"
+                      title="${aSolo ? 'Show full list' : 'Show only current item as a lower-third'}">
+                ${aSolo ? '☰ List' : '◉ Solo'}
+              </button>
+            </div>
+            <div class="fg"><label>${aSolo ? 'Solo Size' : 'List Size'}: <span id="agenda-size-${id}">${aSizeVal}</span>%</label>
+              <input type="range" min="20" max="100" step="5" value="${aSizeVal}" data-gid="${id}" data-field="${aSizeKey}"
+                     oninput="document.getElementById('agenda-size-${id}').textContent=this.value; uc('${id}','${aSizeKey}',+this.value)"></div>`;
+        }
 
         case 'image': {
           const lib = g.content.library || [];
@@ -809,7 +921,44 @@
               </select></div>`;
         }
 
-        case 'timer':
+        case 'image_gallery': {
+          const imgs = g.content.images || [];
+          const cur = g.content.current || 0;
+          let curOpts = `<option value="0" ${cur === 0 ? 'selected' : ''}>None</option>`;
+          for (let i = 0; i < imgs.length; i++) {
+            const n = i + 1;
+            curOpts += `<option value="${n}" ${cur === n ? 'selected' : ''}>${n}</option>`;
+          }
+          return `
+            <div class="fg"><label>Images</label>
+              <div class="row" style="gap:6px">
+                <button class="btn-ghost" style="white-space:nowrap;padding:4px 10px;font-size:12px" onclick="pickGalleryImage('${id}')">+ Upload</button>
+                <input type="text" placeholder="Or paste URL and press Enter" style="flex:1"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();addGalleryUrl('${id}',this.value);this.value='';}">
+              </div></div>
+            ${imgs.length ? `<div class="img-library">${imgs.map((u, i) => {
+              const n = i + 1;
+              return `<div class="img-thumb ${cur === n ? 'img-active' : ''}" onclick="selectGalleryImage('${id}',${n})" title="Image ${n}">
+                <img src="${esc(u)}">
+                <span class="img-num">${n}</span>
+                <button class="img-remove" onclick="event.stopPropagation(); removeGalleryImage('${id}',${i})" title="Remove">✕</button>
+              </div>`;
+            }).join('')}</div>` : '<div style="font-size:12px;color:var(--text-dim);padding:6px 0">No images yet. Upload or paste a URL above.</div>'}
+            <div class="row">
+              <div class="fg"><label>Current</label>
+                <select data-gid="${id}" data-field="current"
+                        onchange="uc('${id}','current',+this.value)">${curOpts}</select></div>
+              <div class="fg"><label>Sizing</label>
+                <select data-gid="${id}" data-field="sizing"
+                        onchange="uc('${id}','sizing',this.value)">
+                  <option value="contain" ${g.content.sizing==='contain'?'selected':''}>Contain</option>
+                  <option value="cover" ${g.content.sizing==='cover'?'selected':''}>Cover</option>
+                </select></div>
+            </div>`;
+        }
+
+        case 'timer': {
+          const tmSize = g.content.size != null ? g.content.size : 50;
           return `
             <div class="row">
               <div class="fg"><label>Mode</label>
@@ -829,7 +978,11 @@
               <div class="fg"><label>Label</label>
                 <input type="text" value="${esc(g.content.label)}" data-gid="${id}" data-field="label"
                        oninput="uc('${id}','label',this.value)"></div>
-            </div>`;
+            </div>
+            <div class="fg"><label>Size: <span id="tm-size-${id}">${tmSize}</span>%</label>
+              <input type="range" min="20" max="100" step="5" value="${tmSize}" data-gid="${id}" data-field="size"
+                     oninput="document.getElementById('tm-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>`;
+        }
 
         case 'score':
           return scoreLine(id, g.content.team1, 'team1', 'Team 1')
@@ -1009,6 +1162,79 @@
       if (!g) return;
       g.content.library = (g.content.library || []).filter(u => u !== url);
       if (g.content.url === url) g.content.url = g.content.library[0] || '';
+      save();
+    }
+    function pickGalleryImage(id) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = async () => {
+        const g = project.graphics.find(g => g.id === id);
+        if (!g || !input.files.length) return;
+        if (!g.content.images) g.content.images = [];
+        for (const file of input.files) {
+          const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type }, body: file });
+          const { url } = await res.json();
+          g.content.images.push(url);
+        }
+        if (!g.content.current) g.content.current = 1;
+        save();
+      };
+      input.click();
+    }
+    function addGalleryUrl(id, url) {
+      const trimmed = (url || '').trim();
+      if (!trimmed) return;
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      if (!g.content.images) g.content.images = [];
+      g.content.images.push(trimmed);
+      if (!g.content.current) g.content.current = g.content.images.length;
+      save();
+    }
+    function selectGalleryImage(id, n) { uc(id, 'current', n); }
+    function ucItem(id, idx, key, value) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      if (!g.content.items) {
+        g.content.items = g.content.title != null
+          ? [{title: g.content.title, subtitle: g.content.subtitle || ''}]
+          : [];
+      }
+      if (!g.content.items[idx]) g.content.items[idx] = {title: '', subtitle: ''};
+      g.content.items[idx][key] = value;
+      save();
+    }
+    function addLtItem(id) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      if (!g.content.items) {
+        g.content.items = g.content.title != null
+          ? [{title: g.content.title, subtitle: g.content.subtitle || ''}]
+          : [];
+      }
+      g.content.items.push({title: '', subtitle: ''});
+      g.content.current = g.content.items.length;
+      save();
+    }
+    function removeLtItem(id, idx) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g || !g.content.items) return;
+      g.content.items.splice(idx, 1);
+      if (g.content.items.length === 0) g.content.items.push({title: '', subtitle: ''});
+      const len = g.content.items.length;
+      if (!g.content.current || g.content.current > len) g.content.current = len;
+      if (g.content.current < 1) g.content.current = 1;
+      save();
+    }
+    function removeGalleryImage(id, idx) {
+      const g = project.graphics.find(g => g.id === id);
+      if (!g) return;
+      g.content.images = (g.content.images || []).filter((_, i) => i !== idx);
+      const len = g.content.images.length;
+      if (g.content.current > len) g.content.current = len;
+      if (g.content.current < 0) g.content.current = 0;
       save();
     }
     // uc = update content, usf = update score field, adj = adjust score
@@ -1502,10 +1728,12 @@
 
     function getFieldsForType(type) {
       switch(type) {
-        case 'lower_third': return [{path:'title',label:'Title'},{path:'subtitle',label:'Subtitle'}];
+        case 'lower_third': return [{path:'current',label:'Current'},{path:'items.0.title',label:'Item 1 Title'},{path:'items.0.subtitle',label:'Item 1 Subtitle'}];
         case 'message': return [{path:'text',label:'Text'},{path:'detail',label:'Detail'}];
         case 'ticker': return [{path:'items',label:'Items'}];
+        case 'agenda': return [{path:'title',label:'Title'},{path:'items',label:'Items'}];
         case 'image': return [{path:'url',label:'URL'}];
+        case 'image_gallery': return [{path:'current',label:'Current'}];
         case 'timer': return [{path:'duration',label:'Duration'},{path:'label',label:'Label'}];
         case 'score': return [
           {path:'team1.name',label:'Team 1 Name'},{path:'team1.score',label:'Team 1 Score'},
@@ -2241,7 +2469,15 @@
 
     // ─── Drag & Drop reorder ───────────────────────────────────────────────
     let dragIdx = null;
+    let lastMouseDownTarget = null;
+    document.addEventListener('mousedown', (e) => { lastMouseDownTarget = e.target; }, true);
+
     function onDragStart(e) {
+      // Don't reorder cards when the user is interacting with a form control inside one
+      if (lastMouseDownTarget && lastMouseDownTarget.closest && lastMouseDownTarget.closest('input, textarea, select, button')) {
+        e.preventDefault();
+        return;
+      }
       dragIdx = +e.currentTarget.dataset.index;
       e.currentTarget.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -2295,7 +2531,7 @@
     function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
     function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
     function typeIcon(t) {
-      return { lower_third: '🎙', message: '📢', ticker: '📰', image: '🖼️', timer: '⏱️', score: '🏆' }[t] || '📦';
+      return { lower_third: '🎙', message: '📢', ticker: '📰', agenda: '📋', image: '🖼️', image_gallery: '🎞️', timer: '⏱️', score: '🏆' }[t] || '📦';
     }
     function formatTypeName(t) { return t.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
     function esc(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
