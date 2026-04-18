@@ -220,18 +220,31 @@
     .ticker.graphic-hide { animation: slideOutDown 0.3s ease forwards; }
 
     /* ─── Agenda ─────────────────────────────────────────────────────────── */
+    /* Two-phase solo choreography:
+       INTO solo  — phase 1 (0 → 0.18s): title + non-current items collapse fast.
+                    phase 2 (0.18 → 0.58s): position floats + body/current morph.
+       OUT solo   — phase 1 (0 → 0.40s): position floats back + body/current morph back.
+                    phase 2 (0.40 → 0.58s): title + non-current items expand back. */
     .agenda {
       --scale: 1.25;
       position: absolute;
       top: 80px;
       left: 60px;
       max-width: calc(520px * var(--scale));
-      /* Smoothly float to the solo slot (and back) when the position changes */
-      transition: top 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-                  left 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-                  bottom 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-                  right 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-                  max-width 0.45s ease;
+      /* OUT-of-solo: position moves immediately back to the list slot */
+      transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  max-width 0.4s ease;
+    }
+    .agenda.solo {
+      /* INTO-solo: position float waits for the list to collapse first */
+      transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
+                  left 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
+                  bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
+                  right 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
+                  max-width 0.4s ease 0.18s;
     }
     .agenda .agenda-body {
       background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
@@ -240,7 +253,12 @@
       border-radius: 8px;
       border-left: 4px solid var(--primary);
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      transition: background 0.45s ease, padding 0.45s ease, border-left-color 0.45s ease, box-shadow 0.45s ease, backdrop-filter 0.45s ease;
+      /* OUT-of-solo: body restyles in parallel with position */
+      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease;
+    }
+    .agenda.solo .agenda-body {
+      /* INTO-solo: body restyle waits for list collapse */
+      transition: background 0.4s ease 0.18s, padding 0.4s ease 0.18s, border-left-color 0.4s ease 0.18s, box-shadow 0.4s ease 0.18s, backdrop-filter 0.4s ease 0.18s;
     }
     .agenda .agenda-title {
       font-size: calc(22px * var(--scale));
@@ -253,7 +271,8 @@
       border-bottom: 2px solid rgba(255,255,255,0.1);
       max-height: calc(100px * var(--scale));
       overflow: hidden;
-      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease, border-color 0.35s ease;
+      /* OUT-of-solo: title appears AFTER position has settled (delay 0.4s) */
+      transition: max-height 0.18s ease 0.4s, opacity 0.16s ease 0.4s, padding 0.18s ease 0.4s, margin 0.18s ease 0.4s, border-color 0.16s ease 0.4s;
     }
     .agenda .agenda-list {
       list-style: none;
@@ -277,7 +296,13 @@
       border-radius: 6px;
       max-height: calc(120px * var(--scale));
       overflow: hidden;
-      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease, font-size 0.45s ease, background 0.35s ease, color 0.35s ease, border-radius 0.35s ease, box-shadow 0.45s ease, gap 0.45s ease;
+      /* OUT-of-solo: current item morph happens in parallel with position; non-current items expand AFTER */
+      transition: font-size 0.4s ease, background 0.35s ease, color 0.35s ease, border-radius 0.35s ease, box-shadow 0.4s ease, gap 0.4s ease, padding 0.4s ease,
+                  max-height 0.18s ease 0.4s, opacity 0.16s ease 0.4s, margin 0.18s ease 0.4s;
+    }
+    .agenda .agenda-item:not(.agenda-current) {
+      /* Non-current items: expansion (incl. padding) is delayed until position has settled */
+      transition: max-height 0.18s ease 0.4s, opacity 0.16s ease 0.4s, padding 0.18s ease 0.4s, margin 0.18s ease 0.4s;
     }
     .agenda .agenda-item::before {
       content: counter(agenda) ".";
@@ -285,7 +310,7 @@
       font-weight: 700;
       min-width: calc(28px * var(--scale));
       flex-shrink: 0;
-      transition: min-width 0.45s ease, opacity 0.35s ease, color 0.35s ease;
+      transition: min-width 0.4s ease, opacity 0.35s ease, color 0.35s ease;
     }
     .agenda .agenda-sub {
       font-size: calc(17px * var(--scale));
@@ -300,7 +325,8 @@
       border-radius: 6px;
       max-height: calc(120px * var(--scale));
       overflow: hidden;
-      transition: max-height 0.45s ease, opacity 0.35s ease, padding 0.45s ease, margin 0.45s ease;
+      /* OUT-of-solo: sub-items expand AFTER position has settled */
+      transition: max-height 0.18s ease 0.4s, opacity 0.16s ease 0.4s, padding 0.18s ease 0.4s, margin 0.18s ease 0.4s;
     }
     .agenda .agenda-sub::before {
       content: '–';
@@ -325,6 +351,8 @@
     }
     /* Solo mode: hide everything except the current main item, morph it into a lower-third */
     .agenda.solo .agenda-title {
+      /* INTO-solo: title collapses fast (phase 1) */
+      transition: max-height 0.16s ease, opacity 0.14s ease, padding 0.16s ease, margin 0.16s ease, border-color 0.14s ease;
       max-height: 0;
       opacity: 0;
       padding-top: 0;
@@ -335,6 +363,8 @@
     }
     .agenda.solo .agenda-item:not(.agenda-current),
     .agenda.solo .agenda-sub {
+      /* INTO-solo: non-current items collapse fast (phase 1) */
+      transition: max-height 0.16s ease, opacity 0.14s ease, padding 0.16s ease, margin 0.16s ease;
       max-height: 0;
       opacity: 0;
       padding-top: 0;
@@ -342,14 +372,10 @@
       margin-top: 0;
       margin-bottom: 0;
     }
-    .agenda.solo .agenda-body {
-      background: transparent;
-      backdrop-filter: none;
-      border-left-color: transparent;
-      padding: 0;
-      box-shadow: none;
-    }
     .agenda.solo .agenda-current {
+      /* INTO-solo: current item morphs in phase 2 (delay 0.18s, parallel with position) */
+      transition: font-size 0.4s ease 0.18s, background 0.35s ease 0.18s, color 0.35s ease 0.18s,
+                  border-radius 0.35s ease 0.18s, box-shadow 0.4s ease 0.18s, gap 0.4s ease 0.18s, padding 0.4s ease 0.18s;
       font-size: calc(32px * var(--scale));
       font-weight: 700;
       gap: 0;
@@ -360,6 +386,8 @@
       box-shadow: inset calc(4px * var(--scale)) 0 0 var(--primary), 0 8px 32px rgba(0,0,0,0.4);
     }
     .agenda.solo .agenda-current::before {
+      /* INTO-solo: number badge fades with the morph in phase 2 */
+      transition: min-width 0.35s ease 0.18s, opacity 0.3s ease 0.18s, color 0.3s ease 0.18s;
       min-width: 0;
       opacity: 0;
       color: transparent;
