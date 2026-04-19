@@ -220,9 +220,12 @@
     .ticker.graphic-hide { animation: slideOutDown 0.3s ease forwards; }
 
     /* ─── Agenda ─────────────────────────────────────────────────────────── */
-    /* Two-phase solo choreography:
-       INTO solo  — phase 1 (0 → 0.18s): title + non-current items collapse fast.
-                    phase 2 (0.18 → 0.58s): position floats + body/current morph.
+    /* Solo choreography:
+       INTO solo  — single 0 → 0.4s motion: title + non-current items collapse fast (0-0.16s)
+                    while the .agenda simultaneously slides to the solo slot, min-height releases,
+                    and the body/current item morph. The flex-column + justify-content:flex-end
+                    plus the frozen min-height keeps the body bottom-anchored during the collapse,
+                    so the whole transition reads as one continuous downward motion.
        OUT solo   — phase 1 (0 → 0.40s): position floats back + body/current morph back + title expands.
                     phase 2 (0.40 → 0.58s): non-current items expand back. */
     .agenda {
@@ -231,7 +234,15 @@
       top: 80px;
       left: 60px;
       max-width: calc(520px * var(--scale));
-      /* OUT-of-solo: position moves immediately back to the list slot */
+      /* Anchor content to the bottom: during INTO-solo we freeze min-height at the
+         list's measured size so the body collapses downward (bottom fixed) instead
+         of shrinking upward from a fixed top. */
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      /* OUT-of-solo: position moves immediately back to the list slot.
+         min-height has no transition here — it's set instantly when freezing
+         the list height at the start of INTO-solo. */
       transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
                   left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
                   bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1),
@@ -239,12 +250,14 @@
                   max-width 0.4s ease;
     }
     .agenda.solo {
-      /* INTO-solo: position float waits for the list to collapse first */
-      transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
-                  left 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
-                  bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
-                  right 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.18s,
-                  max-width 0.4s ease 0.18s;
+      /* INTO-solo: position and min-height slide in one motion with the item collapse —
+         no delay, so the container starts moving to the solo slot immediately. */
+      transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                  max-width 0.4s ease,
+                  min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .agenda .agenda-body {
       background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
@@ -254,14 +267,18 @@
       border-left: 4px solid var(--primary);
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
       /* OUT-of-solo: body restyles in parallel with position */
-      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease;
+      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease, border-radius 0.4s ease;
     }
     .agenda.solo .agenda-body {
-      /* INTO-solo: body restyle waits for list collapse */
-      transition: background 0.4s ease 0.18s, padding 0.4s ease 0.18s, border-left-color 0.4s ease 0.18s, border-left-width 0.4s ease 0.18s, box-shadow 0.4s ease 0.18s, backdrop-filter 0.4s ease 0.18s;
-      /* Drop the body's left accent in solo so the current item's own
-         inset accent is the only one visible (no double border) */
+      /* INTO-solo: body decorations drop out so only the current item renders the
+         lower-third box (no outer frame around it). */
+      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease, border-radius 0.4s ease;
+      background: transparent;
+      padding: 0;
       border-left-width: 0;
+      border-radius: 0;
+      box-shadow: none;
+      backdrop-filter: blur(0);
     }
     .agenda .agenda-title {
       font-size: calc(22px * var(--scale));
@@ -361,8 +378,9 @@
     }
     /* Solo mode: hide everything except the current main item, morph it into a lower-third */
     .agenda.solo .agenda-title {
-      /* INTO-solo: title collapses fast (phase 1) */
-      transition: max-height 0.16s ease, opacity 0.14s ease, padding 0.16s ease, margin 0.16s ease, border-color 0.14s ease;
+      /* INTO-solo: opacity snaps to 0 instantly so the title vanishes right away;
+         max-height/padding/margin still transition so the layout folds smoothly. */
+      transition: max-height 0.16s ease, padding 0.16s ease, margin 0.16s ease, border-color 0.14s ease;
       max-height: 0;
       opacity: 0;
       padding-top: 0;
@@ -383,9 +401,9 @@
       margin-bottom: 0;
     }
     .agenda.solo .agenda-current {
-      /* INTO-solo: current item morphs in phase 2 (delay 0.18s, parallel with position) */
-      transition: font-size 0.4s ease 0.18s, background 0.35s ease 0.18s, color 0.35s ease 0.18s,
-                  border-radius 0.35s ease 0.18s, box-shadow 0.4s ease 0.18s, gap 0.4s ease 0.18s, padding 0.4s ease 0.18s;
+      /* INTO-solo: current item morphs in parallel with the slide (no delay). */
+      transition: font-size 0.4s ease, background 0.35s ease, color 0.35s ease,
+                  border-radius 0.35s ease, box-shadow 0.4s ease, gap 0.4s ease, padding 0.4s ease;
       font-size: calc(32px * var(--scale));
       font-weight: 700;
       gap: 0;
@@ -396,8 +414,8 @@
       box-shadow: inset calc(4px * var(--scale)) 0 0 var(--primary), 0 8px 32px rgba(0,0,0,0.4);
     }
     .agenda.solo .agenda-current::before {
-      /* INTO-solo: number badge fades with the morph in phase 2 */
-      transition: min-width 0.35s ease 0.18s, opacity 0.3s ease 0.18s, color 0.3s ease 0.18s;
+      /* INTO-solo: number badge fades with the morph (no delay, in parallel with slide). */
+      transition: min-width 0.35s ease, opacity 0.3s ease, color 0.3s ease;
       min-width: 0;
       opacity: 0;
       color: transparent;
@@ -885,7 +903,26 @@
           el.classList.toggle('has-current', !!cur);
           const wasSolo = el.classList.contains('solo');
           const isSolo = !!g.content.solo;
+          // INTO solo: freeze the list's current height as min-height so that,
+          // combined with the .agenda's justify-content:flex-end, the body stays
+          // anchored to the bottom during the collapse (folds downward). Must set
+          // this before toggling .solo so the frozen height is in place when the
+          // list items begin collapsing.
+          if (isSolo && !wasSolo) {
+            el.style.minHeight = el.offsetHeight + 'px';
+          }
           el.classList.toggle('solo', isSolo);
+          if (isSolo && !wasSolo) {
+            // Force a reflow so the frozen min-height is committed, then release
+            // it to 0. The .agenda.solo transition animates min-height back to 0
+            // in parallel with the position slide, so the container slides down
+            // as one continuous motion while the body stays flex-end-anchored.
+            void el.offsetHeight;
+            el.style.minHeight = '0px';
+          } else if (!isSolo && wasSolo) {
+            // Clear any lingering frozen min-height when returning to list mode.
+            el.style.minHeight = '';
+          }
           if (isSolo !== wasSolo) {
             // Mode switched — apply the position saved for the new slot, or clear to CSS default
             const activePos = getActivePosition(g);
