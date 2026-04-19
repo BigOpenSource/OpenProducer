@@ -223,8 +223,8 @@
     /* Two-phase solo choreography:
        INTO solo  — phase 1 (0 → 0.18s): title + non-current items collapse fast.
                     phase 2 (0.18 → 0.58s): position floats + body/current morph.
-       OUT solo   — phase 1 (0 → 0.40s): position floats back + body/current morph back.
-                    phase 2 (0.40 → 0.58s): title + non-current items expand back. */
+       OUT solo   — phase 1 (0 → 0.40s): position floats back + body/current morph back + title expands.
+                    phase 2 (0.40 → 0.58s): non-current items expand back. */
     .agenda {
       --scale: 1.25;
       position: absolute;
@@ -254,11 +254,14 @@
       border-left: 4px solid var(--primary);
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
       /* OUT-of-solo: body restyles in parallel with position */
-      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease;
+      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease;
     }
     .agenda.solo .agenda-body {
       /* INTO-solo: body restyle waits for list collapse */
-      transition: background 0.4s ease 0.18s, padding 0.4s ease 0.18s, border-left-color 0.4s ease 0.18s, box-shadow 0.4s ease 0.18s, backdrop-filter 0.4s ease 0.18s;
+      transition: background 0.4s ease 0.18s, padding 0.4s ease 0.18s, border-left-color 0.4s ease 0.18s, border-left-width 0.4s ease 0.18s, box-shadow 0.4s ease 0.18s, backdrop-filter 0.4s ease 0.18s;
+      /* Drop the body's left accent in solo so the current item's own
+         inset accent is the only one visible (no double border) */
+      border-left-width: 0;
     }
     .agenda .agenda-title {
       font-size: calc(22px * var(--scale));
@@ -269,10 +272,15 @@
       padding-bottom: calc(12px * var(--scale));
       margin-bottom: calc(16px * var(--scale));
       border-bottom: 2px solid rgba(255,255,255,0.1);
-      max-height: calc(100px * var(--scale));
+      max-height: calc(300px * var(--scale));
       overflow: hidden;
-      /* OUT-of-solo: title appears AFTER position has settled (delay 0.4s) */
-      transition: max-height 0.18s ease 0.4s, opacity 0.16s ease 0.4s, padding 0.18s ease 0.4s, margin 0.18s ease 0.4s, border-color 0.16s ease 0.4s;
+      /* Render embedded newlines as actual line breaks for multi-line titles */
+      white-space: pre-line;
+      /* Anchor text to the bottom so collapse appears to fold the title downward */
+      display: flex;
+      align-items: flex-end;
+      /* OUT-of-solo: title expands immediately in phase 1 (no delay) so the heading is present as the list view engages */
+      transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease, margin 0.4s ease, border-color 0.3s ease;
     }
     .agenda .agenda-list {
       list-style: none;
@@ -289,7 +297,8 @@
       font-weight: 600;
       line-height: 1.3;
       display: flex;
-      align-items: baseline;
+      /* Anchor content (number + text) at the BOTTOM of the box so collapse folds downward */
+      align-items: flex-end;
       gap: calc(14px * var(--scale));
       text-shadow: 0 2px 8px rgba(0,0,0,0.3);
       padding: calc(4px * var(--scale)) calc(12px * var(--scale));
@@ -319,7 +328,8 @@
       opacity: 0.78;
       margin-left: calc(42px * var(--scale));
       display: flex;
-      align-items: baseline;
+      /* Anchor content at bottom so collapse folds downward */
+      align-items: flex-end;
       gap: calc(10px * var(--scale));
       padding: calc(2px * var(--scale)) calc(12px * var(--scale));
       border-radius: 6px;

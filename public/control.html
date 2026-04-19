@@ -876,8 +876,8 @@
           }
           return `
             <div class="fg"><label>Title</label>
-              <input type="text" value="${esc(g.content.title || '')}" data-gid="${id}" data-field="title"
-                     oninput="uc('${id}','title',this.value)"></div>
+              <textarea rows="2" data-gid="${id}" data-field="title"
+                        oninput="uc('${id}','title',this.value)">${esc(g.content.title || '')}</textarea></div>
             <div class="fg"><label>Items (one per line, prefix with - for sub-item)</label>
               <textarea rows="6" data-gid="${id}" data-field="items"
                         oninput="uc('${id}','items',this.value.split('\\n').filter(Boolean))">${aItems.join('\n')}</textarea></div>
