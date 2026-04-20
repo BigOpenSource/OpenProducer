@@ -270,9 +270,11 @@
       transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease, border-radius 0.4s ease;
     }
     .agenda.solo .agenda-body {
-      /* INTO-solo: body decorations drop out so only the current item renders the
-         lower-third box (no outer frame around it). */
-      transition: background 0.4s ease, padding 0.4s ease, border-left-color 0.4s ease, border-left-width 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease, border-radius 0.4s ease;
+      /* INTO-solo: decorations (background, border-left, border-radius, box-shadow,
+         backdrop-filter) snap out immediately so no ghost frame lingers around the
+         current item. Only padding stays in the transition list so the layout
+         collapse is still smooth. */
+      transition: padding 0.4s ease;
       background: transparent;
       padding: 0;
       border-left-width: 0;
@@ -914,11 +916,19 @@
           el.classList.toggle('solo', isSolo);
           if (isSolo && !wasSolo) {
             // Force a reflow so the frozen min-height is committed, then release
-            // it to 0. The .agenda.solo transition animates min-height back to 0
-            // in parallel with the position slide, so the container slides down
-            // as one continuous motion while the body stays flex-end-anchored.
+            // it to the exact body-solo size (current item height + gaps between
+            // all hidden items). Landing min-height precisely on the natural
+            // solo body height means agenda.height = min-height = body.height at
+            // t=0.4, so no crossover kink and no rate change — the motion stays
+            // one continuous slide all the way to the final position.
             void el.offsetHeight;
-            el.style.minHeight = '0px';
+            const scale = parseFloat(getComputedStyle(el).getPropertyValue('--scale')) || 1.25;
+            const itemCount = el.querySelectorAll('.agenda-item, .agenda-sub').length;
+            // Current item in solo: font-size 32*scale, line-height 1.3, padding 16*scale top+bottom.
+            const currentItemSoloH = (32 * 1.3 + 32) * scale; // 73.6 * scale
+            // Gap in list between flex items: 2 * scale; applies between every pair.
+            const gapTotal = Math.max(0, itemCount - 1) * 2 * scale;
+            el.style.minHeight = (currentItemSoloH + gapTotal) + 'px';
           } else if (!isSolo && wasSolo) {
             // Clear any lingering frozen min-height when returning to list mode.
             el.style.minHeight = '';
