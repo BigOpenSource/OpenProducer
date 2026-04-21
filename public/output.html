@@ -309,6 +309,16 @@
       gap: calc(2px * var(--scale));
       padding: 0;
       margin: 0;
+      /* Transition gap so it can smoothly close up in solo (where items before
+         the current have max-height 0 but would otherwise contribute gap space,
+         shifting the current item's position based on its index). */
+      transition: gap 0.16s ease;
+    }
+    .agenda.solo .agenda-list {
+      /* In solo, drop the inter-item gap so hidden items contribute zero vertical
+         offset — the current item always lands at list.top regardless of its
+         index, so the solo lower-third sits at the same height for every pick. */
+      gap: 0;
     }
     .agenda .agenda-item {
       counter-increment: agenda;
@@ -916,19 +926,17 @@
           el.classList.toggle('solo', isSolo);
           if (isSolo && !wasSolo) {
             // Force a reflow so the frozen min-height is committed, then release
-            // it to the exact body-solo size (current item height + gaps between
-            // all hidden items). Landing min-height precisely on the natural
-            // solo body height means agenda.height = min-height = body.height at
-            // t=0.4, so no crossover kink and no rate change — the motion stays
-            // one continuous slide all the way to the final position.
+            // it to the exact body-solo size. In solo the list's gap collapses
+            // to 0 (see .agenda.solo .agenda-list), so body.h is just the
+            // current item's solo height — no gap term. Landing min-height on
+            // that value means agenda.height = min-height = body.height at the
+            // end of the motion: one continuous slide, same end position for
+            // every current pick.
             void el.offsetHeight;
             const scale = parseFloat(getComputedStyle(el).getPropertyValue('--scale')) || 1.25;
-            const itemCount = el.querySelectorAll('.agenda-item, .agenda-sub').length;
             // Current item in solo: font-size 32*scale, line-height 1.3, padding 16*scale top+bottom.
             const currentItemSoloH = (32 * 1.3 + 32) * scale; // 73.6 * scale
-            // Gap in list between flex items: 2 * scale; applies between every pair.
-            const gapTotal = Math.max(0, itemCount - 1) * 2 * scale;
-            el.style.minHeight = (currentItemSoloH + gapTotal) + 'px';
+            el.style.minHeight = currentItemSoloH + 'px';
           } else if (!isSolo && wasSolo) {
             // Clear any lingering frozen min-height when returning to list mode.
             el.style.minHeight = '';
