@@ -14,12 +14,56 @@
       color: #ccc;
     }
 
+    .page {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #14141a;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .toolbar label {
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 10px;
+      color: #888;
+    }
+    .toolbar select, .toolbar button {
+      background: #1f1f29;
+      color: #ddd;
+      border: 1px solid #2c2c38;
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .toolbar select:hover, .toolbar button:hover { border-color: #3a3a48; }
+    .toolbar select { min-width: 220px; }
+    .toolbar .status {
+      margin-left: auto;
+      color: #777;
+      font-size: 11px;
+    }
+    .toolbar .status.error { color: #e63946; }
+    .toolbar .status.ok { color: #4caf50; }
+
     .multiview {
       display: flex;
       gap: 12px;
       padding: 12px;
       width: 100%;
-      height: 100%;
+      flex: 1;
+      min-height: 0;
       align-items: center;
       justify-content: center;
     }
@@ -58,6 +102,18 @@
     .monitor.is-cued .monitor-frame { border-color: #4a4000; }
     .monitor.is-live .monitor-frame { border-color: #5a1018; }
 
+    .monitor-frame .cam-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1920px;
+      height: 1080px;
+      object-fit: contain;
+      background: #000;
+      transform-origin: 0 0;
+      z-index: 1;
+    }
+
     .monitor-frame iframe {
       position: absolute;
       top: 0;
@@ -66,42 +122,72 @@
       height: 1080px;
       border: none;
       transform-origin: 0 0;
+      background: transparent;
+      z-index: 2;
     }
   </style>
 </head>
 <body>
-  <div class="multiview" id="multiview">
-    <div class="monitor is-cued" id="monCued">
-      <div class="monitor-label cued">Preview (Cued)</div>
-      <div class="monitor-frame" id="frameCued">
-        <iframe id="iframeCued"></iframe>
-      </div>
+  <div class="page">
+    <div class="toolbar">
+      <label for="camSelect">Camera</label>
+      <select id="camSelect">
+        <option value="">— None —</option>
+      </select>
+      <button id="enableBtn" title="Grant camera permission so device labels appear">Enable Cameras</button>
+      <button id="refreshBtn" title="Re-scan video inputs">Refresh</button>
+      <span class="status" id="status">Click "Enable Cameras" to list video sources</span>
     </div>
-    <div class="monitor is-live" id="monLive">
-      <div class="monitor-label live">Program (Live)</div>
-      <div class="monitor-frame" id="frameLive">
-        <iframe id="iframeLive"></iframe>
+
+    <div class="multiview" id="multiview">
+      <div class="monitor is-cued" id="monCued">
+        <div class="monitor-label cued">Preview (Cued)</div>
+        <div class="monitor-frame" id="frameCued">
+          <video class="cam-video" id="videoCued" autoplay playsinline muted></video>
+          <iframe id="iframeCued"></iframe>
+        </div>
+      </div>
+      <div class="monitor is-live" id="monLive">
+        <div class="monitor-label live">Program (Live)</div>
+        <div class="monitor-frame" id="frameLive">
+          <video class="cam-video" id="videoLive" autoplay playsinline muted></video>
+          <iframe id="iframeLive"></iframe>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     const PROJECT_ID = window.location.pathname.split('/')[2];
+    const STORAGE_KEY = `multiview:camera:${PROJECT_ID}`;
+
     const iframeCued = document.getElementById('iframeCued');
     const iframeLive = document.getElementById('iframeLive');
     const frameCued = document.getElementById('frameCued');
     const frameLive = document.getElementById('frameLive');
+    const videoCued = document.getElementById('videoCued');
+    const videoLive = document.getElementById('videoLive');
+    const camSelect = document.getElementById('camSelect');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const enableBtn = document.getElementById('enableBtn');
+    const statusEl = document.getElementById('status');
 
-    iframeCued.src = `/preview/${PROJECT_ID}?bg=%23111`;
-    iframeLive.src = `/output/${PROJECT_ID}?bg=%23111`;
+    iframeCued.src = `/preview/${PROJECT_ID}`;
+    iframeLive.src = `/output/${PROJECT_ID}`;
 
     function resize() {
       [frameCued, frameLive].forEach(frame => {
-        const iframe = frame.querySelector('iframe');
         const w = frame.clientWidth;
         const h = frame.clientHeight;
         const scale = Math.min(w / 1920, h / 1080);
-        iframe.style.transform = `scale(${scale})`;
+        // Center the 1920x1080 stage inside the frame so any letterbox/pillarbox
+        // is symmetric, then scale-and-translate as one unit.
+        const offsetX = (w - 1920 * scale) / 2;
+        const offsetY = (h - 1080 * scale) / 2;
+        const transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        frame.querySelectorAll('iframe, .cam-video').forEach(el => {
+          el.style.transform = transform;
+        });
       });
     }
 
@@ -109,6 +195,159 @@
     ro.observe(frameCued);
     ro.observe(frameLive);
     window.addEventListener('load', resize);
+
+    // ─── Camera selection ─────────────────────────────────────────────────
+    let currentStream = null;
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    function stopStream() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+        currentStream = null;
+      }
+      videoCued.srcObject = null;
+      videoLive.srcObject = null;
+    }
+
+    async function populateDevices() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        setStatus('mediaDevices API unavailable (needs https or localhost)', 'error');
+        return;
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      const prevValue = camSelect.value;
+      camSelect.innerHTML = '<option value="">— None —</option>';
+      cams.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Camera ${i + 1}`;
+        camSelect.appendChild(opt);
+      });
+      // Restore prior selection if still present
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const target = prevValue || saved || '';
+      if (target && cams.some(c => c.deviceId === target)) {
+        camSelect.value = target;
+      }
+      // If labels are still hidden, the user hasn't granted permission yet.
+      // Surface the Enable button as the next step.
+      const hasLabels = cams.some(c => !!c.label);
+      if (cams.length === 0) {
+        setStatus('No video inputs detected', 'error');
+      } else if (!hasLabels) {
+        setStatus(`Found ${cams.length} device(s) — click "Enable Cameras" to see names and stream`);
+      }
+      return { cams, hasLabels };
+    }
+
+    // Prime camera permission with a generic getUserMedia so enumerateDevices()
+    // returns real labels and (on Safari) real deviceIds. Safe to call repeatedly.
+    async function enableCameras() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('getUserMedia unavailable (needs https or localhost)', 'error');
+        return false;
+      }
+      try {
+        setStatus('Requesting camera permission…');
+        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        probe.getTracks().forEach(t => t.stop());
+        await populateDevices();
+        setStatus('Camera permission granted — pick a source', 'ok');
+        return true;
+      } catch (err) {
+        console.error(err);
+        setStatus(`Permission error: ${err.message || err.name}`, 'error');
+        return false;
+      }
+    }
+
+    async function startStream(deviceId) {
+      stopStream();
+      if (!deviceId) {
+        setStatus('No camera selected');
+        return;
+      }
+      try {
+        setStatus('Requesting camera…');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: { exact: deviceId },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
+        currentStream = stream;
+        videoCued.srcObject = stream;
+        videoLive.srcObject = stream;
+        const label = camSelect.options[camSelect.selectedIndex]?.textContent || 'camera';
+        setStatus(`Streaming: ${label}`, 'ok');
+        // Labels become available after permission — refresh dropdown
+        populateDevices();
+      } catch (err) {
+        console.error(err);
+        setStatus(`Camera error: ${err.message || err.name}`, 'error');
+      }
+    }
+
+    camSelect.addEventListener('change', async () => {
+      const id = camSelect.value;
+      localStorage.setItem(STORAGE_KEY, id);
+      // If user picked something but we still don't have permission (deviceId
+      // may be a stub), prime first.
+      if (id) {
+        const opt = camSelect.options[camSelect.selectedIndex];
+        const looksUnprimed = !opt || !opt.textContent || opt.textContent.startsWith('Camera ');
+        if (looksUnprimed) {
+          const ok = await enableCameras();
+          if (!ok) return;
+          // After priming, the deviceId may have changed; try the saved one or first cam.
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved && Array.from(camSelect.options).some(o => o.value === saved)) {
+            camSelect.value = saved;
+          } else if (camSelect.options.length > 1) {
+            camSelect.selectedIndex = 1;
+            localStorage.setItem(STORAGE_KEY, camSelect.value);
+          }
+        }
+      }
+      startStream(camSelect.value);
+    });
+
+    refreshBtn.addEventListener('click', () => populateDevices());
+    enableBtn.addEventListener('click', enableCameras);
+
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', populateDevices);
+    }
+
+    (async () => {
+      // If permission was previously granted, auto-prime so labels appear immediately.
+      let alreadyGranted = false;
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const status = await navigator.permissions.query({ name: 'camera' });
+          alreadyGranted = status.state === 'granted';
+        }
+      } catch (_) { /* Safari may not support permissions.query for camera */ }
+
+      if (alreadyGranted) {
+        await enableCameras();
+      } else {
+        await populateDevices();
+      }
+
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved && Array.from(camSelect.options).some(o => o.value === saved)) {
+        camSelect.value = saved;
+        if (alreadyGranted) startStream(saved);
+      }
+    })();
   </script>
 </body>
 </html>
