@@ -16,6 +16,7 @@ const io = new Server(server);
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const PORT = process.env.PORT || 4001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -1348,7 +1349,7 @@ function getDefaultContent(type) {
 }
 
 // ─── Start ──────────────────────────────────────────────────────────────────
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   const ifaces = require('os').networkInterfaces();
   let localIP = '127.0.0.1';
   for (const name of Object.keys(ifaces)) {
@@ -1362,7 +1363,9 @@ server.listen(PORT, () => {
   console.log(`\n  ┌──────────────────────────────────────────┐`);
   console.log(`  │       My Broadcast Graphics              │`);
   console.log(`  ├──────────────────────────────────────────┤`);
-  console.log(`  │  Local:   http://localhost:${PORT}/        │`);
-  console.log(`  │  Network: http://${localIP}:${PORT}/  │`);
+  console.log(`  │  Local:   http://${HOST}:${PORT}/        │`);
+  if (HOST === '0.0.0.0' || HOST === '::') {
+    console.log(`  │  Network: http://${localIP}:${PORT}/  │`);
+  }
   console.log(`  └──────────────────────────────────────────┘\n`);
 });
