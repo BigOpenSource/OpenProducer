@@ -78,6 +78,7 @@
     .timer-graphic { z-index: 15; }
     .image-graphic { z-index: 5; }
     .agenda { z-index: 18; }
+    .social-comments { z-index: 25; }
 
     /* ─── Draggable ──────────────────────────────────────────────────── */
     .graphic-draggable { cursor: move; }
@@ -376,16 +377,18 @@
     .agenda .agenda-current {
       background: var(--primary);
       color: #fff;
+      opacity: 1;
       box-shadow: inset 0 0 0 transparent, 0 4px 16px rgba(0,0,0,0.35);
     }
     .agenda .agenda-current::before {
       color: #fff;
     }
-    .agenda.has-current .agenda-item:not(.agenda-current),
-    .agenda.has-current .agenda-sub:not(.agenda-current-sub) {
+    .agenda.has-current .agenda-item:not(.agenda-current):not(.agenda-current-parent),
+    .agenda.has-current .agenda-sub:not(.agenda-current):not(.agenda-current-sub) {
       opacity: 0.45;
     }
-    .agenda .agenda-current-sub {
+    .agenda .agenda-current-sub,
+    .agenda .agenda-current-parent {
       opacity: 1;
     }
     /* Solo mode: hide everything except the current main item, morph it into a lower-third */
@@ -402,7 +405,7 @@
       border-bottom-color: transparent;
     }
     .agenda.solo .agenda-item:not(.agenda-current),
-    .agenda.solo .agenda-sub {
+    .agenda.solo .agenda-sub:not(.agenda-current) {
       /* INTO-solo: non-current items collapse fast (phase 1) */
       transition: max-height 0.16s ease, opacity 0.14s ease, padding 0.16s ease, margin 0.16s ease;
       max-height: 0;
@@ -411,6 +414,11 @@
       padding-bottom: 0;
       margin-top: 0;
       margin-bottom: 0;
+    }
+    .agenda.solo .agenda-sub.agenda-current {
+      /* In solo, a highlighted sub-item gets the same lower-third morph as a main.
+         Reset the sub-item's indent so it lands in the standard solo slot. */
+      margin-left: 0;
     }
     .agenda.solo .agenda-current {
       /* INTO-solo: current item morphs in parallel with the slide (no delay). */
@@ -534,6 +542,75 @@
     }
     .score-graphic.graphic-show { animation: popIn 0.5s ease forwards; }
     .score-graphic.graphic-hide { animation: popOut 0.3s ease forwards; }
+
+    /* ─── Social comments ────────────────────────────────────────────────── */
+    .social-comments {
+      --scale: 1;
+      position: absolute;
+      bottom: 100px;
+      right: 60px;
+      width: calc(480px * var(--scale));
+      display: flex;
+      flex-direction: column-reverse;
+      gap: calc(10px * var(--scale));
+      pointer-events: none;
+    }
+    .social-comments .sc-item {
+      background: linear-gradient(135deg, rgba(20,22,36,0.92), rgba(29,53,87,0.88));
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      padding: calc(12px * var(--scale)) calc(16px * var(--scale));
+      border-left: 4px solid var(--primary);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      animation: slideInLeft 0.35s ease forwards;
+    }
+    .social-comments .sc-item.platform-twitch { border-left-color: #9146ff; }
+    .social-comments .sc-item.platform-youtube { border-left-color: #ff0000; }
+    .social-comments .sc-item.platform-kick { border-left-color: #53fc18; }
+    .social-comments .sc-item.platform-x { border-left-color: #1d9bf0; }
+    .social-comments .sc-head {
+      display: flex;
+      align-items: center;
+      gap: calc(8px * var(--scale));
+      margin-bottom: calc(4px * var(--scale));
+    }
+    .social-comments .sc-avatar {
+      width: calc(28px * var(--scale));
+      height: calc(28px * var(--scale));
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .social-comments .sc-author {
+      font-size: calc(15px * var(--scale));
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .social-comments .sc-badge {
+      font-size: calc(10px * var(--scale));
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: calc(2px * var(--scale)) calc(7px * var(--scale));
+      border-radius: 4px;
+      color: #fff;
+      margin-left: auto;
+    }
+    .social-comments .sc-badge.platform-twitch { background: #9146ff; }
+    .social-comments .sc-badge.platform-youtube { background: #ff0000; }
+    .social-comments .sc-badge.platform-kick { background: #53fc18; color: #000; }
+    .social-comments .sc-badge.platform-x { background: #000; }
+    .social-comments .sc-text {
+      font-size: calc(17px * var(--scale));
+      line-height: 1.35;
+      color: rgba(255,255,255,0.95);
+      word-wrap: break-word;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .social-comments.graphic-show { animation: fadeIn 0.3s ease forwards; }
+    .social-comments.graphic-hide { animation: fadeOut 0.3s ease forwards; }
 
     /* ─── Custom CSS injection ───────────────────────────────────────────── */
     #customCSS { }
@@ -781,6 +858,11 @@
           `);
           break;
 
+        case 'social_comment':
+          el = createElement('div', `social-comments graphic-show`, renderSocialCommentsInner(g));
+          el.style.setProperty('--scale', pctScale(g.content.size));
+          break;
+
         default:
           return;
       }
@@ -981,7 +1063,39 @@
           el.style.setProperty('--scale', pctScale(g.content.size));
           break;
         }
+        case 'social_comment': {
+          el.innerHTML = renderSocialCommentsInner(g);
+          el.style.setProperty('--scale', pctScale(g.content.size));
+          break;
+        }
       }
+    }
+
+    function renderSocialCommentsInner(g) {
+      const items = (g.content.current || []).slice(0, g.content.maxVisible || 3);
+      if (!items.length) return '';
+      const showAvatar = g.content.showAvatar !== false;
+      const showBadge = g.content.showPlatformBadge !== false;
+      const labels = { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', x: 'X' };
+      return items.map(c => {
+        const plat = c.platform || '';
+        const avatar = showAvatar && c.authorAvatar
+          ? `<img class="sc-avatar" src="${esc(c.authorAvatar)}" onerror="this.style.display='none'">`
+          : '';
+        const badge = showBadge
+          ? `<span class="sc-badge platform-${esc(plat)}">${esc(labels[plat] || plat)}</span>`
+          : '';
+        return `
+          <div class="sc-item platform-${esc(plat)}">
+            <div class="sc-head">
+              ${avatar}
+              <span class="sc-author">${esc(c.author || '')}</span>
+              ${badge}
+            </div>
+            <div class="sc-text">${esc(c.text || '')}</div>
+          </div>
+        `;
+      }).join('');
     }
 
     // ─── Timer logic ───────────────────────────────────────────────────────
@@ -1081,19 +1195,29 @@
     }
 
     function renderAgendaItems(items, current) {
-      let mainIdx = 0;
-      let inCurrent = false;
-      return (items || []).map(line => {
-        const trimmed = String(line).trim();
-        if (trimmed.startsWith('-')) {
-          const text = trimmed.slice(1).trim();
-          const cls = inCurrent ? 'agenda-sub agenda-current-sub' : 'agenda-sub';
-          return `<li class="${cls}">${esc(replaceVars(text))}</li>`;
+      items = items || [];
+      const isSubLine = s => String(s).trim().startsWith('-');
+      // If current points at a sub-item, find its parent main's line index (1-based).
+      let currentParent = 0;
+      if (current > 0 && current <= items.length && isSubLine(items[current - 1])) {
+        for (let i = current - 2; i >= 0; i--) {
+          if (!isSubLine(items[i])) { currentParent = i + 1; break; }
         }
-        mainIdx++;
-        inCurrent = (current && mainIdx === current);
-        const cls = inCurrent ? 'agenda-item agenda-current' : 'agenda-item';
-        return `<li class="${cls}">${esc(replaceVars(line))}</li>`;
+      }
+      // If current is a main, remember it so its direct sub-children can be marked as context.
+      const currentMain = (current > 0 && !isSubLine(items[current - 1])) ? current : 0;
+      let lastMainLine = 0;
+      return items.map((line, i) => {
+        const lineN = i + 1;
+        const trimmed = String(line).trim();
+        const isSub = trimmed.startsWith('-');
+        if (!isSub) lastMainLine = lineN;
+        const text = isSub ? trimmed.slice(1).trim() : line;
+        let cls = isSub ? 'agenda-sub' : 'agenda-item';
+        if (lineN === current) cls += ' agenda-current';
+        else if (isSub && currentMain && lastMainLine === currentMain) cls += ' agenda-current-sub';
+        else if (!isSub && currentParent && lineN === currentParent) cls += ' agenda-current-parent';
+        return `<li class="${cls}">${esc(replaceVars(text))}</li>`;
       }).join('');
     }
 

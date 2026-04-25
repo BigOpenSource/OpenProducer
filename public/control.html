@@ -336,6 +336,13 @@
       background: var(--surface); border: 1.5px solid var(--border); border-radius: 6px;
       color: var(--text); font-family: inherit; resize: vertical;
     }
+    .format-step-card textarea.format-default-text {
+      width: min(72%, 960px);
+      min-height: 140px;
+    }
+    @media (max-width: 900px) {
+      .format-step-card textarea.format-default-text { width: 100%; }
+    }
     .step-card textarea:focus { border-color: var(--accent); }
     .step-actions { display: flex; flex-direction: column; gap: 4px; }
     .step-action {
@@ -380,6 +387,59 @@
     /* ─── Drag & drop ──────── */
     .gcard.dragging { opacity: 0.3; }
     .gcard.drag-over { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ─── Social comments feed ──────── */
+    .sc-feed-label {
+      font-size: 11px; color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 4px;
+    }
+    .sc-feed {
+      max-height: 220px; overflow-y: auto; display: flex; flex-direction: column;
+      gap: 4px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 6px;
+    }
+    .sc-source-row {
+      display: grid;
+      grid-template-columns: 94px minmax(0, 1fr) auto 30px;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .sc-source-row select,
+    .sc-source-row input[type="text"] {
+      min-width: 0;
+      width: 100%;
+    }
+    .sc-source-row .sc-source-enabled {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .sc-source-row .sc-source-remove {
+      padding: 2px 0;
+      width: 30px;
+      font-size: 12px;
+    }
+    .sc-feed-item {
+      background: var(--surface); border-left: 3px solid var(--border);
+      border-radius: 3px; padding: 5px 8px; font-size: 12px;
+    }
+    .sc-feed-item.sc-plat-twitch { border-left-color: #9146ff; }
+    .sc-feed-item.sc-plat-youtube { border-left-color: #ff0000; }
+    .sc-feed-item.sc-plat-kick { border-left-color: #53fc18; }
+    .sc-feed-item.sc-plat-x { border-left-color: #1d9bf0; }
+    .sc-feed-head {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+    }
+    .sc-feed-plat {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      color: var(--text-dim); letter-spacing: 0.5px;
+    }
+    .sc-feed-author { font-weight: 600; color: var(--text); font-size: 11px; }
+    .sc-feed-actions { margin-left: auto; display: flex; gap: 3px; }
+    .sc-feed-text { color: var(--text); line-height: 1.3; word-wrap: break-word; }
   </style>
 </head>
 <body>
@@ -416,6 +476,7 @@
         <button class="graphic-type-btn" onclick="addGraphic('image_gallery')"><span class="icon">🎞</span> Image Gallery</button>
         <button class="graphic-type-btn" onclick="addGraphic('timer')"><span class="icon">⏱</span> Timer</button>
         <button class="graphic-type-btn" onclick="addGraphic('score')"><span class="icon">⚽</span> Scoreboard</button>
+        <button class="graphic-type-btn" onclick="addGraphic('social_comment')"><span class="icon">💭</span> Social Comments</button>
       </div>
     </div>
 
@@ -732,6 +793,7 @@
       } else {
         render();
       }
+      ensureSocialSubscribed();
     });
 
     // ─── Tabs ──────────────────────────────────────────────────────────────
@@ -869,11 +931,19 @@
           const aSolo = !!g.content.solo;
           const aSizeKey = aSolo ? 'sizeSolo' : 'size';
           const aSizeVal = g.content[aSizeKey] != null ? g.content[aSizeKey] : 50;
-          const mainCount = aItems.filter(l => !String(l).trim().startsWith('-')).length;
           let curOpts = `<option value="0" ${aCurrent === 0 ? 'selected' : ''}>None</option>`;
-          for (let i = 1; i <= mainCount; i++) {
-            curOpts += `<option value="${i}" ${aCurrent === i ? 'selected' : ''}>${i}</option>`;
-          }
+          let mainNum = 0, subNum = 0;
+          aItems.forEach((line, i) => {
+            const trimmed = String(line).trim();
+            const isSub = trimmed.startsWith('-');
+            const text = isSub ? trimmed.slice(1).trim() : line;
+            if (isSub) { subNum++; } else { mainNum++; subNum = 0; }
+            const prefix = isSub ? `${mainNum}.${subNum}` : `${mainNum}.`;
+            const label = `${prefix} ${text}`;
+            const trunc = label.length > 40 ? label.slice(0, 40) + '…' : label;
+            const val = i + 1;
+            curOpts += `<option value="${val}" ${aCurrent === val ? 'selected' : ''}>${esc(trunc)}</option>`;
+          });
           return `
             <div class="fg"><label>Title</label>
               <textarea rows="2" data-gid="${id}" data-field="title"
@@ -988,8 +1058,113 @@
           return scoreLine(id, g.content.team1, 'team1', 'Team 1')
                + scoreLine(id, g.content.team2, 'team2', 'Team 2');
 
+        case 'social_comment': {
+          const sources = g.content.sources || [];
+          const mod = g.content.moderation || 'auto';
+          const mode = g.content.displayMode || 'queue';
+          const maxVis = g.content.maxVisible != null ? g.content.maxVisible : 3;
+          const rotateSec = g.content.rotateSec != null ? g.content.rotateSec : 8;
+          const holdSec = g.content.holdSec != null ? g.content.holdSec : 10;
+          const scSize = g.content.size != null ? g.content.size : 50;
+          const showAvatar = g.content.showAvatar !== false;
+          const showBadge = g.content.showPlatformBadge !== false;
+          const platformLabel = { twitch: 'Channel', youtube: 'Video ID', kick: 'Channel', x: 'Post ID' };
+          const sourceRows = sources.map((s, i) => {
+            const plat = s.platform || 'twitch';
+            const ref = s.ref || '';
+            const enabled = s.enabled !== false;
+            return `
+              <div class="sc-source-row">
+                <select onchange="updateSocialSource('${id}',${i},'platform',this.value)">
+                  <option value="twitch" ${plat==='twitch'?'selected':''}>Twitch</option>
+                  <option value="youtube" ${plat==='youtube'?'selected':''}>YouTube</option>
+                  <option value="kick" ${plat==='kick'?'selected':''}>Kick</option>
+                  <option value="x" ${plat==='x'?'selected':''}>X</option>
+                </select>
+                <input type="text" value="${esc(ref)}" placeholder="${platformLabel[plat] || 'ref'}"
+                       oninput="updateSocialSource('${id}',${i},'ref',this.value)">
+                <label class="sc-source-enabled">
+                  <input type="checkbox" ${enabled?'checked':''} onchange="updateSocialSource('${id}',${i},'enabled',this.checked)">on</label>
+                <button class="btn-ghost sc-source-remove" onclick="removeSocialSource('${id}',${i})">✕</button>
+              </div>`;
+          }).join('');
+          const pending = (socialFeeds[id]?.pending) || [];
+          const incoming = (socialFeeds[id]?.incoming) || [];
+          const pendingHtml = mod === 'approval' && pending.length
+            ? `<div style="margin-top:10px"><div class="sc-feed-label">Awaiting approval (${pending.length})</div>
+                 <div class="sc-feed">${pending.map(c => feedItemHtml(id, c, true)).join('')}</div></div>`
+            : '';
+          const onAir = g.content.current || [];
+          const onAirHtml = onAir.length
+            ? `<div style="margin-top:10px"><div class="sc-feed-label">On air (${onAir.length})</div>
+                 <div class="sc-feed">${onAir.map(c => feedItemHtml(id, c, false, true)).join('')}</div></div>`
+            : '';
+          const feedHtml = incoming.length
+            ? `<div class="sc-feed">${incoming.slice(0, 30).map(c => feedItemHtml(id, c, false)).join('')}</div>`
+            : `<div style="font-size:12px;color:var(--text-dim);padding:6px 0">No comments yet. Add a source and enable it.</div>`;
+          return `
+            <div class="fg"><label>Sources</label>
+              ${sourceRows}
+              <button class="btn-ghost" onclick="addSocialSource('${id}')" style="padding:4px 10px;font-size:12px">+ Add source</button>
+            </div>
+            <div class="row">
+              <div class="fg"><label>Moderation</label>
+                <select onchange="uc('${id}','moderation',this.value)">
+                  <option value="auto" ${mod==='auto'?'selected':''}>Auto</option>
+                  <option value="approval" ${mod==='approval'?'selected':''}>Approval</option>
+                </select></div>
+              <div class="fg"><label>Display</label>
+                <select onchange="uc('${id}','displayMode',this.value)">
+                  <option value="queue" ${mode==='queue'?'selected':''}>Queue</option>
+                  <option value="rotate" ${mode==='rotate'?'selected':''}>Rotate</option>
+                </select></div>
+            </div>
+            <div class="row">
+              <div class="fg"><label>Max visible</label>
+                <input type="number" min="1" max="10" value="${maxVis}"
+                       oninput="uc('${id}','maxVisible',+this.value)"></div>
+              <div class="fg"><label>${mode==='rotate'?'Rotate sec':'Hold sec'}</label>
+                <input type="number" min="1" value="${mode==='rotate'?rotateSec:holdSec}"
+                       oninput="uc('${id}','${mode==='rotate'?'rotateSec':'holdSec'}',+this.value)"></div>
+            </div>
+            <div class="row" style="font-size:12px;gap:16px">
+              <label style="display:flex;align-items:center;gap:4px">
+                <input type="checkbox" ${showAvatar?'checked':''} onchange="uc('${id}','showAvatar',this.checked)">Show avatar</label>
+              <label style="display:flex;align-items:center;gap:4px">
+                <input type="checkbox" ${showBadge?'checked':''} onchange="uc('${id}','showPlatformBadge',this.checked)">Show platform badge</label>
+            </div>
+            <div class="fg"><label>Size: <span id="sc-size-${id}">${scSize}</span>%</label>
+              <input type="range" min="40" max="150" step="5" value="${scSize}"
+                     oninput="document.getElementById('sc-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>
+            ${onAirHtml}
+            ${pendingHtml}
+            <div style="margin-top:10px">
+              <div class="sc-feed-label">Incoming feed</div>
+              ${feedHtml}
+            </div>`;
+        }
+
         default: return '';
       }
+    }
+
+    function feedItemHtml(gid, c, isPending, isOnAir) {
+      const plat = c.platform || '';
+      const actions = isPending
+        ? `<button class="btn-ghost" onclick="approveComment('${gid}','${esc(c.id)}')" style="padding:2px 8px;font-size:11px">✓</button>
+           <button class="btn-ghost" onclick="rejectComment('${gid}','${esc(c.id)}')" style="padding:2px 8px;font-size:11px">✕</button>`
+        : isOnAir
+          ? `<button class="btn-ghost" onclick="dropOnAirComment('${gid}','${esc(c.id)}')" style="padding:2px 8px;font-size:11px" title="Remove from air">✕</button>`
+          : `<button class="btn-ghost" onclick="pushComment('${gid}','${esc(c.id)}')" style="padding:2px 8px;font-size:11px" title="Send on air">▶</button>`;
+      return `
+        <div class="sc-feed-item sc-plat-${esc(plat)}">
+          <div class="sc-feed-head">
+            <span class="sc-feed-plat">${esc(plat)}</span>
+            <span class="sc-feed-author">${esc(c.author || '')}</span>
+            <span class="sc-feed-actions">${actions}</span>
+          </div>
+          <div class="sc-feed-text">${esc(c.text || '')}</div>
+        </div>`;
     }
 
     function scoreLine(id, team, key, label) {
@@ -1249,6 +1424,92 @@
     function adj(id, team, delta) {
       const g = project.graphics.find(g => g.id === id);
       if (g) { g.content[team].score += delta; save(); }
+    }
+
+    // ─── Social comments ──────────────────────────────────────────────────
+    const socialFeeds = {}; // graphicId -> { incoming: [], pending: [] }
+    const socialSubscribed = new Set();
+
+    function ensureSocialSubscribed() {
+      if (!project) return;
+      const ids = new Set((project.graphics || []).filter(g => g.type === 'social_comment').map(g => g.id));
+      for (const id of ids) {
+        if (!socialSubscribed.has(id)) {
+          socket.emit('comments:subscribe', { projectId: project.id, graphicId: id });
+          socialSubscribed.add(id);
+        }
+      }
+      for (const id of Array.from(socialSubscribed)) {
+        if (!ids.has(id)) {
+          socket.emit('comments:unsubscribe', { projectId: project.id, graphicId: id });
+          socialSubscribed.delete(id);
+          delete socialFeeds[id];
+        }
+      }
+    }
+
+    function rerenderCard(gid) {
+      const card = document.querySelector(`.gcard[data-id="${gid}"] .gcard-body`);
+      const g = project.graphics.find(g => g.id === gid);
+      if (card && g) card.innerHTML = renderCardBody(g);
+    }
+
+    socket.on('comments:new', ({ graphicId, comment }) => {
+      if (!socialFeeds[graphicId]) socialFeeds[graphicId] = { incoming: [], pending: [] };
+      const f = socialFeeds[graphicId];
+      f.incoming.unshift(comment);
+      if (f.incoming.length > 100) f.incoming.length = 100;
+      const g = project.graphics.find(x => x.id === graphicId);
+      if (g && g.content.moderation === 'approval') {
+        f.pending.unshift(comment);
+        if (f.pending.length > 50) f.pending.length = 50;
+      }
+      rerenderCard(graphicId);
+    });
+
+    socket.on('comments:pending-drop', ({ graphicId, commentId }) => {
+      const f = socialFeeds[graphicId];
+      if (!f) return;
+      f.pending = f.pending.filter(c => c.id !== commentId);
+      rerenderCard(graphicId);
+    });
+
+    function addSocialSource(gid) {
+      const g = project.graphics.find(g => g.id === gid);
+      if (!g) return;
+      g.content.sources = g.content.sources || [];
+      g.content.sources.push({ platform: 'twitch', ref: '', enabled: true });
+      save();
+    }
+
+    function updateSocialSource(gid, idx, field, value) {
+      const g = project.graphics.find(g => g.id === gid);
+      if (!g || !g.content.sources || !g.content.sources[idx]) return;
+      g.content.sources[idx][field] = value;
+      save();
+    }
+
+    function removeSocialSource(gid, idx) {
+      const g = project.graphics.find(g => g.id === gid);
+      if (!g || !g.content.sources) return;
+      g.content.sources.splice(idx, 1);
+      save();
+    }
+
+    function pushComment(gid, commentId) {
+      socket.emit('comments:push', { projectId: project.id, graphicId: gid, commentId });
+    }
+
+    function approveComment(gid, commentId) {
+      socket.emit('comments:approve', { projectId: project.id, graphicId: gid, commentId });
+    }
+
+    function rejectComment(gid, commentId) {
+      socket.emit('comments:reject', { projectId: project.id, graphicId: gid, commentId });
+    }
+
+    function dropOnAirComment(gid, commentId) {
+      socket.emit('comments:drop', { projectId: project.id, graphicId: gid, commentId });
     }
 
     // ─── Layouts ──────────────────────────────────────────────────────────
@@ -1739,6 +2000,10 @@
           {path:'team1.name',label:'Team 1 Name'},{path:'team1.score',label:'Team 1 Score'},
           {path:'team2.name',label:'Team 2 Name'},{path:'team2.score',label:'Team 2 Score'}
         ];
+        case 'social_comment': return [
+          {path:'moderation',label:'Moderation'},{path:'displayMode',label:'Display Mode'},
+          {path:'maxVisible',label:'Max Visible'}
+        ];
         default: return [];
       }
     }
@@ -1879,7 +2144,7 @@
       const graphicOpts = project.graphics.map(g =>
         `<option value="${g.id}">${esc(g.name)} (${g.type.replace('_',' ')})</option>`
       ).join('');
-      return `<div class="step-card">
+      return `<div class="step-card format-step-card">
         <div class="step-header">
           <div class="step-num">${sti + 1}</div>
           <input type="text" value="${esc(step.label||'')}" placeholder="Step label (e.g. Guest Intro)"
@@ -1896,7 +2161,7 @@
           </div>
         </div>
         ${step.locked ? `<div style="font-size:11px;color:var(--yellow);padding:4px 0">🔒 Locked — this step will not change during generation</div>` : ''}
-        <textarea placeholder="Default teleprompter text..." ${step.locked ? 'style="opacity:0.5"' : ''}
+        <textarea class="format-default-text" placeholder="Default teleprompter text..." ${step.locked ? 'style="opacity:0.5"' : ''}
                   onchange="updateFmtStep(${fi},${sti},'defaultText',this.value)">${esc(step.defaultText||'')}</textarea>
         <div class="step-actions">
           ${step.actions.map((a, ai) => renderFmtAction(a, ai, fi, sti, graphicOpts)).join('')}
@@ -2531,7 +2796,7 @@
     function openOutput() { window.open(`/output/${PROJECT_ID}`, '_blank', 'width=1920,height=1080'); }
     function openPreview() { window.open(`/multiview/${PROJECT_ID}`, '_blank', 'width=1200,height=400'); }
     function typeIcon(t) {
-      return { lower_third: '🎙', message: '📢', ticker: '📰', agenda: '📋', image: '🖼️', image_gallery: '🎞️', timer: '⏱️', score: '🏆' }[t] || '📦';
+      return { lower_third: '🎙', message: '📢', ticker: '📰', agenda: '📋', image: '🖼️', image_gallery: '🎞️', timer: '⏱️', score: '🏆', social_comment: '💭' }[t] || '📦';
     }
     function formatTypeName(t) { return t.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
     function esc(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }

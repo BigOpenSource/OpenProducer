@@ -9,6 +9,20 @@ const mammoth = require('mammoth');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 
+// Load .env (tiny inline loader — no dotenv dep)
+(function loadEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/i);
+    if (!m || m[1].startsWith('#')) continue;
+    const [, k, rawV] = m;
+    if (process.env[k]) continue;
+    const v = rawV.replace(/^['"]|['"]$/g, '');
+    process.env[k] = v;
+  }
+})();
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -68,6 +82,7 @@ function loadProject(id) {
 
 function saveProject(project) {
   fs.writeFileSync(projectPath(project.id), JSON.stringify(project, null, 2));
+  try { reconcileSocialSessions(project); } catch (e) { console.warn('[social] reconcile error:', e.message); }
 }
 
 function listProjects() {
@@ -1190,13 +1205,172 @@ app.get('/api/obs/inputs', async (req, res) => {
   } catch (e) { res.json({ inputs: [], error: e.message }); }
 });
 
+// ─── Social comments: sessions, connectors, and logging ───────────────────
+const socialSessions = new Map(); // graphicId -> session
+const socialConnectorCache = {};
+
+function getSocialConnector(platform) {
+  if (socialConnectorCache[platform] !== undefined) return socialConnectorCache[platform];
+  const p = path.join(__dirname, 'sources', `${platform}.js`);
+  if (!fs.existsSync(p)) { socialConnectorCache[platform] = null; return null; }
+  try { socialConnectorCache[platform] = require(p); }
+  catch (e) { console.warn(`[social] failed to load ${platform}:`, e.message); socialConnectorCache[platform] = null; }
+  return socialConnectorCache[platform];
+}
+
+function socialConfigKey(g) {
+  return (g.content?.sources || [])
+    .filter(s => s && s.enabled !== false && s.ref)
+    .map(s => `${s.platform}:${String(s.ref).trim().toLowerCase()}`)
+    .sort().join('|');
+}
+
+function reconcileSocialSessions(project) {
+  if (!project || !project.graphics) return;
+  const liveIds = new Set();
+  for (const g of project.graphics) {
+    if (g.type !== 'social_comment') continue;
+    liveIds.add(g.id);
+    const existing = socialSessions.get(g.id);
+    const newKey = socialConfigKey(g);
+    if (!existing) {
+      if (newKey) startSocialSession(project.id, g);
+    } else if (existing.configKey !== newKey) {
+      stopSocialSession(g.id);
+      if (newKey) startSocialSession(project.id, g);
+    }
+  }
+  for (const gid of Array.from(socialSessions.keys())) {
+    const sess = socialSessions.get(gid);
+    if (sess.projectId === project.id && !liveIds.has(gid)) stopSocialSession(gid);
+  }
+}
+
+function startSocialSession(projectId, g) {
+  const sess = {
+    projectId, graphicId: g.id,
+    connectors: [],
+    incomingBuffer: [], // newest first, capped
+    pending: [],        // newest first, capped
+    holdTimers: new Map(),
+    configKey: socialConfigKey(g)
+  };
+  socialSessions.set(g.id, sess);
+  for (const s of g.content.sources || []) {
+    if (!s || s.enabled === false || !s.ref) continue;
+    const mod = getSocialConnector(s.platform);
+    if (!mod) { console.warn(`[social] no connector for ${s.platform}`); continue; }
+    try {
+      const handle = mod(s, {
+        onComment: (c) => handleIncomingComment(g.id, c),
+        onError: (e) => console.warn(`[social ${s.platform}:${s.ref}] ${e?.message || e}`),
+        onStatus: () => {}
+      });
+      sess.connectors.push({ source: s, handle });
+    } catch (e) {
+      console.warn(`[social] ${s.platform} start failed:`, e.message);
+    }
+  }
+}
+
+function stopSocialSession(gid) {
+  const sess = socialSessions.get(gid);
+  if (!sess) return;
+  for (const c of sess.connectors) { try { c.handle?.stop?.(); } catch {} }
+  for (const t of sess.holdTimers.values()) clearTimeout(t);
+  socialSessions.delete(gid);
+}
+
+function logSocialComment(projectId, graphicId, comment) {
+  try {
+    const dir = path.join(DATA_DIR, 'comments', projectId, graphicId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    fs.appendFileSync(path.join(dir, `${date}.jsonl`), JSON.stringify(comment) + '\n');
+  } catch (e) { /* non-fatal */ }
+}
+
+function handleIncomingComment(gid, comment) {
+  const sess = socialSessions.get(gid);
+  if (!sess) return;
+  // Dedupe
+  if (sess.incomingBuffer.some(c => c.id === comment.id)) return;
+  sess.incomingBuffer.unshift(comment);
+  if (sess.incomingBuffer.length > 100) sess.incomingBuffer.length = 100;
+  logSocialComment(sess.projectId, gid, comment);
+
+  const project = loadProject(sess.projectId);
+  if (!project) return;
+  const g = project.graphics.find(x => x.id === gid);
+  if (!g) return;
+
+  io.to(sess.projectId).emit('comments:new', { graphicId: gid, comment });
+
+  const mode = g.content.moderation || 'auto';
+  if (mode === 'approval') {
+    sess.pending.unshift(comment);
+    if (sess.pending.length > 50) sess.pending.length = 50;
+  } else {
+    pushCommentToAir(project, g, comment);
+  }
+}
+
+function pushCommentToAir(project, g, comment) {
+  g.content.current = g.content.current || [];
+  if (g.content.current.some(c => c.id === comment.id)) return;
+  g.content.current.unshift(comment);
+  const max = Math.max(1, g.content.maxVisible || 3);
+  while (g.content.current.length > max) g.content.current.pop();
+  // Write without triggering reconcile (avoid useless diffing)
+  fs.writeFileSync(projectPath(project.id), JSON.stringify(project, null, 2));
+  if (g.isLive) io.to(project.id).emit('graphic:update', g);
+  io.to(project.id).emit('project:update', project);
+
+  const sess = socialSessions.get(g.id);
+  if (!sess) return;
+  const holdSec = g.content.displayMode === 'rotate'
+    ? (g.content.rotateSec || 8)
+    : (g.content.holdSec || 10);
+  if (holdSec > 0) {
+    const t = setTimeout(() => dropCommentFromAir(g.id, comment.id), holdSec * 1000);
+    sess.holdTimers.set(comment.id, t);
+  }
+}
+
+function dropCommentFromAir(gid, commentId) {
+  const sess = socialSessions.get(gid);
+  if (sess) {
+    const existing = sess.holdTimers.get(commentId);
+    if (existing) { clearTimeout(existing); sess.holdTimers.delete(commentId); }
+  }
+  const projectId = sess?.projectId;
+  if (!projectId) return;
+  const project = loadProject(projectId);
+  if (!project) return;
+  const g = project.graphics.find(x => x.id === gid);
+  if (!g) return;
+  const before = (g.content.current || []).length;
+  g.content.current = (g.content.current || []).filter(c => c.id !== commentId);
+  if (g.content.current.length === before) return;
+  fs.writeFileSync(projectPath(project.id), JSON.stringify(project, null, 2));
+  if (g.isLive) io.to(project.id).emit('graphic:update', g);
+  io.to(project.id).emit('project:update', project);
+}
+
+// Graceful shutdown
+process.on('SIGINT', () => { for (const id of Array.from(socialSessions.keys())) stopSocialSession(id); process.exit(0); });
+process.on('SIGTERM', () => { for (const id of Array.from(socialSessions.keys())) stopSocialSession(id); process.exit(0); });
+
 // ─── Socket.IO ──────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   socket.emit('obs:status', { connected: obsConnected });
   socket.on('join', (projectId) => {
     socket.join(projectId);
     const project = loadProject(projectId);
-    if (project) socket.emit('project:update', project);
+    if (project) {
+      socket.emit('project:update', project);
+      try { reconcileSocialSessions(project); } catch (e) { console.warn('[social] reconcile error:', e.message); }
+    }
   });
 
   socket.on('graphic:toggle', ({ projectId, graphicId }) => {
@@ -1244,6 +1418,56 @@ io.on('connection', (socket) => {
   socket.on('project:save', (project) => {
     saveProject(project);
     io.to(project.id).emit('project:update', project);
+  });
+
+  // ─── Social comments ─────────────────────────────────────────────────
+  socket.on('comments:subscribe', ({ projectId, graphicId }) => {
+    socket.join(projectId);
+    const sess = socialSessions.get(graphicId);
+    if (!sess) return;
+    // Replay recent incoming so the operator's feed populates on reconnect
+    for (const c of sess.incomingBuffer.slice(0, 30).reverse()) {
+      socket.emit('comments:new', { graphicId, comment: c });
+    }
+  });
+
+  socket.on('comments:unsubscribe', () => { /* stateless — no per-socket tracking */ });
+
+  socket.on('comments:push', ({ projectId, graphicId, commentId }) => {
+    const sess = socialSessions.get(graphicId);
+    if (!sess) return;
+    const comment = sess.incomingBuffer.find(c => c.id === commentId);
+    if (!comment) return;
+    const project = loadProject(projectId);
+    if (!project) return;
+    const g = project.graphics.find(x => x.id === graphicId);
+    if (!g) return;
+    pushCommentToAir(project, g, comment);
+  });
+
+  socket.on('comments:approve', ({ projectId, graphicId, commentId }) => {
+    const sess = socialSessions.get(graphicId);
+    if (!sess) return;
+    const idx = sess.pending.findIndex(c => c.id === commentId);
+    if (idx < 0) return;
+    const [comment] = sess.pending.splice(idx, 1);
+    io.to(projectId).emit('comments:pending-drop', { graphicId, commentId });
+    const project = loadProject(projectId);
+    if (!project) return;
+    const g = project.graphics.find(x => x.id === graphicId);
+    if (!g) return;
+    pushCommentToAir(project, g, comment);
+  });
+
+  socket.on('comments:reject', ({ projectId, graphicId, commentId }) => {
+    const sess = socialSessions.get(graphicId);
+    if (!sess) return;
+    sess.pending = sess.pending.filter(c => c.id !== commentId);
+    io.to(projectId).emit('comments:pending-drop', { graphicId, commentId });
+  });
+
+  socket.on('comments:drop', ({ projectId, graphicId, commentId }) => {
+    dropCommentFromAir(graphicId, commentId);
   });
 
   socket.on('obs:connect', async ({ url, password }) => {
@@ -1342,6 +1566,19 @@ function getDefaultContent(type) {
       return {
         team1: { name: 'Team A', score: 0, color: '#e63946' },
         team2: { name: 'Team B', score: 0, color: '#1d3557' }
+      };
+    case 'social_comment':
+      return {
+        sources: [],
+        moderation: 'auto',
+        displayMode: 'queue',
+        maxVisible: 3,
+        rotateSec: 8,
+        holdSec: 10,
+        current: [],
+        showAvatar: true,
+        showPlatformBadge: true,
+        size: 50
       };
     default:
       return {};
