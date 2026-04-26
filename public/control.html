@@ -254,6 +254,113 @@
     .tab-content { display: none; padding: 16px 20px; overflow-y: auto; flex: 1; }
     .tab-content.active { display: block; }
 
+    /* Theme style preset picker */
+    .theme-style-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      max-width: 720px;
+    }
+    .theme-style-card {
+      cursor: pointer;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      transition: border-color 0.15s, transform 0.1s;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .theme-style-card:hover { border-color: var(--accent); }
+    .theme-style-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .theme-style-card .tsc-name { font-size: 12px; font-weight: 700; color: var(--text); }
+    .theme-style-card .tsc-desc { font-size: 11px; color: var(--text-dim); line-height: 1.3; }
+    .theme-style-card .tsc-preview {
+      height: 56px;
+      background: #0c1827;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .theme-style-card .tsc-preview .tsc-bar {
+      height: 4px;
+      width: 60%;
+      background: #e63946;
+      border-radius: 2px 2px 0 0;
+    }
+    .theme-style-card .tsc-preview .tsc-body {
+      background: linear-gradient(135deg, #1d3557, rgba(29,53,87,0.95));
+      border-left: 3px solid #e63946;
+      border-radius: 0 0 4px 4px;
+      padding: 4px 8px;
+      font-size: 9px;
+      color: #fff;
+      font-weight: 700;
+    }
+    /* Per-style preview tweaks */
+    .theme-style-card[data-preset="solid"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="solid"] .tsc-preview .tsc-body {
+      background: #1d3557;
+      border-left: 5px solid #e63946;
+      border-radius: 0;
+    }
+    .theme-style-card[data-preset="minimal"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="minimal"] .tsc-preview .tsc-body {
+      background: rgba(0,0,0,0.55);
+      border-left: none;
+      border-top: 2px solid #e63946;
+      border-radius: 0;
+    }
+    .theme-style-card[data-preset="rounded"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="rounded"] .tsc-preview .tsc-body {
+      background: linear-gradient(135deg, #1d3557, rgba(29,53,87,0.95));
+      border-left: none;
+      border-radius: 12px;
+      box-shadow: 0 0 0 1px rgba(230,57,70,0.4) inset;
+    }
+    .theme-style-card[data-preset="glass"] .tsc-preview {
+      background: linear-gradient(135deg, #143a5e, #0c1827 70%);
+    }
+    .theme-style-card[data-preset="glass"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="glass"] .tsc-preview .tsc-body {
+      background: rgba(255,255,255,0.12);
+      border-left: none;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      backdrop-filter: blur(6px);
+    }
+    .theme-style-card[data-preset="neon"] .tsc-preview { background: #07080d; }
+    .theme-style-card[data-preset="neon"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="neon"] .tsc-preview .tsc-body {
+      background: rgba(10,12,20,0.85);
+      border-left: none;
+      border: 1px solid #e63946;
+      border-radius: 4px;
+      box-shadow: 0 0 6px #e63946, 0 0 12px rgba(230,57,70,0.5);
+    }
+    .theme-style-card[data-preset="gradient"] .tsc-preview .tsc-bar { display:none; }
+    .theme-style-card[data-preset="gradient"] .tsc-preview .tsc-body {
+      background: linear-gradient(135deg, #e63946 0%, #1d3557 100%);
+      border-left: none;
+      border-radius: 10px;
+    }
+    .theme-style-card[data-preset="notch"] .tsc-preview .tsc-bar {
+      width: 30%;
+      height: 6px;
+      border-radius: 0;
+    }
+    .theme-style-card[data-preset="notch"] .tsc-preview .tsc-body {
+      background: #1d3557;
+      border-left: none;
+      border-radius: 0;
+      clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+    }
+
     .var-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .var-table th, .var-table td {
       padding: 6px 10px; border: 1px solid var(--border); text-align: left;
@@ -544,6 +651,11 @@
     <div class="tab-content" id="tab-theme">
       <h3 style="margin-bottom:16px">Theme Settings</h3>
       <div class="flex flex-col gap-md">
+        <div class="form-group">
+          <label>Style Preset</label>
+          <div id="themeStyleGrid" class="theme-style-grid"></div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:6px">Sets element shapes, backgrounds, and borders. Colors below apply on top.</p>
+        </div>
         <div class="form-group">
           <label>Primary Color</label>
           <div class="color-input-wrap">
@@ -907,14 +1019,23 @@
                      oninput="document.getElementById('lt-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>`;
         }
 
-        case 'message':
+        case 'message': {
+          const mSize = g.content.size != null ? g.content.size : 50;
+          const mHeader = g.content.header != null ? g.content.header : 'ALERT';
           return `
+            <div class="fg"><label>Header</label>
+              <input type="text" value="${esc(mHeader)}" data-gid="${id}" data-field="header"
+                     oninput="uc('${id}','header',this.value)"></div>
             <div class="fg"><label>Text</label>
               <input type="text" value="${esc(g.content.text)}" data-gid="${id}" data-field="text"
                      oninput="uc('${id}','text',this.value)"></div>
             <div class="fg"><label>Detail</label>
               <input type="text" value="${esc(g.content.detail)}" data-gid="${id}" data-field="detail"
-                     oninput="uc('${id}','detail',this.value)"></div>`;
+                     oninput="uc('${id}','detail',this.value)"></div>
+            <div class="fg"><label>Size: <span id="message-size-${id}">${mSize}</span>%</label>
+              <input type="range" min="20" max="100" step="5" value="${mSize}" data-gid="${id}" data-field="size"
+                     oninput="document.getElementById('message-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>`;
+        }
 
         case 'ticker':
           return `
@@ -1220,6 +1341,16 @@
     function deleteListRow(li, ri) { project.variables.lists[li].rows.splice(ri, 1); save(); }
 
     // ─── Theme ─────────────────────────────────────────────────────────────
+    const THEME_STYLES = [
+      { id: 'classic',  name: 'Classic',  desc: 'Gradient panels, soft rounding, accent left bar.' },
+      { id: 'solid',    name: 'Solid',    desc: 'Flat solid backgrounds, square corners, thick accent bar.' },
+      { id: 'minimal',  name: 'Minimal',  desc: 'Translucent dark panels, subtle top accent, no border.' },
+      { id: 'rounded',  name: 'Rounded',  desc: 'Heavily rounded corners with a soft accent glow.' },
+      { id: 'glass',    name: 'Glass',    desc: 'Frosted glassmorphism — heavy blur and a hairline white border.' },
+      { id: 'neon',     name: 'Neon',     desc: 'Dark panels lit by a glowing accent outline and dropshadow.' },
+      { id: 'gradient', name: 'Gradient', desc: 'Vibrant primary→secondary gradient fill with modern soft corners.' },
+      { id: 'notch',    name: 'Notch',    desc: 'Asymmetric clipped corner with an accent stripe — bold broadcast look.' }
+    ];
     function renderTheme() {
       const t = project.theme;
       document.getElementById('themePrimary').value = t.primaryColor;
@@ -1230,6 +1361,27 @@
       document.getElementById('themeTextText').value = t.textColor;
       document.getElementById('themeFont').value = t.fontFamily;
       document.getElementById('themeCSS').value = t.customCSS || '';
+      renderThemeStyles();
+    }
+    function renderThemeStyles() {
+      const grid = document.getElementById('themeStyleGrid');
+      if (!grid) return;
+      const sel = project.theme.style || 'classic';
+      grid.innerHTML = THEME_STYLES.map(s => `
+        <div class="theme-style-card${s.id === sel ? ' selected' : ''}" data-preset="${s.id}" onclick="selectThemeStyle('${s.id}')">
+          <div class="tsc-preview">
+            <div class="tsc-bar"></div>
+            <div class="tsc-body">Lower Third</div>
+          </div>
+          <div class="tsc-name">${s.name}</div>
+          <div class="tsc-desc">${s.desc}</div>
+        </div>
+      `).join('');
+    }
+    function selectThemeStyle(id) {
+      project.theme.style = id;
+      save();
+      renderThemeStyles();
     }
     function updateThemeColor(k, v) { project.theme[k] = v; save(); }
     function updateTheme(k, v) { project.theme[k] = v; save(); }

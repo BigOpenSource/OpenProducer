@@ -117,6 +117,7 @@ function createDefaultProject(name) {
       ]
     },
     theme: {
+      style: 'classic',
       primaryColor: '#e63946',
       secondaryColor: '#1d3557',
       textColor: '#ffffff',
@@ -1551,7 +1552,7 @@ function getDefaultContent(type) {
     case 'lower_third':
       return { items: [{ title: 'Name', subtitle: 'Title / Company' }], current: 1, size: 50 };
     case 'message':
-      return { text: 'Breaking News', detail: 'Details here...' };
+      return { header: 'ALERT', text: 'Breaking News', detail: 'Details here...', size: 50 };
     case 'ticker':
       return { items: ['Item 1', 'Item 2', 'Item 3'], speed: 60 };
     case 'agenda':

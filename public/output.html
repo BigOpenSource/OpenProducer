@@ -124,41 +124,42 @@
 
     /* ─── Message ────────────────────────────────────────────────────────── */
     .message {
+      --scale: 1.25;
       position: absolute;
       top: 50px;
       left: 0; right: 0;
       margin-left: auto; margin-right: auto;
       width: fit-content;
-      max-width: 900px;
+      max-width: calc(900px * var(--scale));
       text-align: center;
     }
     .message .msg-badge {
       display: inline-block;
       background: var(--primary);
       color: #fff;
-      font-size: 14px;
+      font-size: calc(14px * var(--scale));
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 2px;
-      padding: 6px 20px;
+      padding: calc(6px * var(--scale)) calc(20px * var(--scale));
       border-radius: 4px 4px 0 0;
     }
     .message .msg-body {
       background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
       backdrop-filter: blur(12px);
-      padding: 20px 40px;
+      padding: calc(20px * var(--scale)) calc(40px * var(--scale));
       border-radius: 0 6px 6px 6px;
       border-top: 3px solid var(--primary);
     }
     .message .msg-text {
-      font-size: 36px;
+      font-size: calc(36px * var(--scale));
       font-weight: 700;
       text-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .message .msg-detail {
-      font-size: 20px;
+      font-size: calc(20px * var(--scale));
       opacity: 0.85;
-      margin-top: 8px;
+      margin-top: calc(8px * var(--scale));
     }
     .message.graphic-show { animation: slideInUp 0.5s ease forwards; }
     .message.graphic-hide { animation: slideOutDown 0.4s ease forwards; }
@@ -612,6 +613,406 @@
     .social-comments.graphic-show { animation: fadeIn 0.3s ease forwards; }
     .social-comments.graphic-hide { animation: fadeOut 0.3s ease forwards; }
 
+    /* ─── Style presets ──────────────────────────────────────────────────── */
+    /* Solid: flat solid backgrounds, square corners, thick accent left bar. */
+    body[data-style="solid"] .lower_third .lt-bar { display: none; }
+    body[data-style="solid"] .lower_third .lt-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-radius: 0;
+      border-left-width: calc(8px * var(--scale));
+    }
+    body[data-style="solid"] .message .msg-badge { border-radius: 0; }
+    body[data-style="solid"] .message .msg-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-radius: 0;
+      border-top-width: 5px;
+    }
+    body[data-style="solid"] .ticker {
+      background: var(--secondary);
+      border-top-width: 5px;
+    }
+    body[data-style="solid"] .agenda .agenda-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-radius: 0;
+      border-left-width: calc(8px * var(--scale));
+    }
+    body[data-style="solid"] .agenda .agenda-item,
+    body[data-style="solid"] .agenda .agenda-sub { border-radius: 0; }
+    body[data-style="solid"] .agenda .agenda-current { box-shadow: none; }
+    body[data-style="solid"] .score-graphic .score-card,
+    body[data-style="solid"] .score-graphic .score-body,
+    body[data-style="solid"] .timer-graphic,
+    body[data-style="solid"] .image-graphic img { border-radius: 0; }
+    body[data-style="solid"] .social-comments .sc-card { border-radius: 0; }
+
+    /* Minimal: dark translucent panels, thin top accent, no left bar. */
+    body[data-style="minimal"] .lower_third .lt-bar { display: none; }
+    body[data-style="minimal"] .lower_third .lt-body {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 0;
+      border-left: none;
+      border-top: 2px solid var(--primary);
+    }
+    body[data-style="minimal"] .message .msg-badge { display: none; }
+    body[data-style="minimal"] .message .msg-body {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 0;
+      border-top: 2px solid var(--primary);
+    }
+    body[data-style="minimal"] .ticker {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--primary);
+    }
+    body[data-style="minimal"] .ticker .ticker-label { background: transparent; color: var(--primary); }
+    body[data-style="minimal"] .agenda .agenda-body {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 0;
+      border-left: none;
+      border-top: 2px solid var(--primary);
+    }
+    body[data-style="minimal"] .agenda .agenda-current {
+      background: transparent;
+      color: var(--primary);
+      box-shadow: inset calc(3px * var(--scale)) 0 0 var(--primary);
+    }
+    body[data-style="minimal"] .agenda .agenda-current::before { color: var(--primary); }
+    body[data-style="minimal"] .score-graphic .score-card,
+    body[data-style="minimal"] .score-graphic .score-body,
+    body[data-style="minimal"] .timer-graphic { border-radius: 0; }
+    body[data-style="minimal"] .social-comments .sc-card {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 0;
+    }
+
+    /* Rounded: heavily rounded corners with a soft accent glow, no left bar. */
+    body[data-style="rounded"] .lower_third .lt-bar { display: none; }
+    body[data-style="rounded"] .lower_third .lt-body {
+      border-radius: calc(16px * var(--scale));
+      border-left: none;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 50%, transparent) inset, 0 12px 36px rgba(0,0,0,0.45);
+    }
+    body[data-style="rounded"] .message .msg-badge {
+      border-radius: 999px;
+      transform: translateY(50%);
+      position: relative;
+      z-index: 2;
+      padding: 6px 24px;
+    }
+    body[data-style="rounded"] .message .msg-body {
+      border-radius: 18px;
+      border-top: none;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 50%, transparent) inset, 0 12px 36px rgba(0,0,0,0.45);
+    }
+    body[data-style="rounded"] .ticker {
+      left: 24px;
+      right: 24px;
+      bottom: 24px;
+      border-radius: 999px;
+      border-top: none;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 50%, transparent) inset, 0 8px 24px rgba(0,0,0,0.35);
+      overflow: hidden;
+    }
+    body[data-style="rounded"] .ticker .ticker-label { border-radius: 999px 0 0 999px; }
+    body[data-style="rounded"] .agenda .agenda-body {
+      border-radius: calc(16px * var(--scale));
+      border-left: none;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 50%, transparent) inset, 0 12px 36px rgba(0,0,0,0.45);
+    }
+    body[data-style="rounded"] .agenda .agenda-item,
+    body[data-style="rounded"] .agenda .agenda-sub { border-radius: 999px; }
+    body[data-style="rounded"] .score-graphic .score-card,
+    body[data-style="rounded"] .score-graphic .score-body { border-radius: 16px; }
+    body[data-style="rounded"] .timer-graphic { border-radius: 18px; }
+    body[data-style="rounded"] .image-graphic img { border-radius: 12px; }
+    body[data-style="rounded"] .social-comments .sc-card { border-radius: 18px; }
+
+    /* Glass: frosted glassmorphism with heavy blur and hairline white border. */
+    body[data-style="glass"] .lower_third .lt-bar { display: none; }
+    body[data-style="glass"] .lower_third .lt-body {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border-left: none;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: calc(14px * var(--scale));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    body[data-style="glass"] .message .msg-badge {
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 999px;
+    }
+    body[data-style="glass"] .message .msg-body {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border-top: none;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: calc(14px * var(--scale));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    body[data-style="glass"] .ticker {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      border-top: none;
+      border: 1px solid rgba(255,255,255,0.22);
+    }
+    body[data-style="glass"] .agenda .agenda-body {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border-left: none;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: calc(14px * var(--scale));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    body[data-style="glass"] .agenda .agenda-item,
+    body[data-style="glass"] .agenda .agenda-sub { border-radius: 10px; }
+    body[data-style="glass"] .score-graphic .score-card,
+    body[data-style="glass"] .score-graphic .score-body {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 14px;
+    }
+    body[data-style="glass"] .timer-graphic {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 14px;
+    }
+    body[data-style="glass"] .image-graphic img { border-radius: 12px; }
+    body[data-style="glass"] .social-comments .sc-card {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 14px;
+    }
+
+    /* Neon: dark panels lit by a glowing accent outline and dropshadow. */
+    body[data-style="neon"] .lower_third .lt-bar { display: none; }
+    body[data-style="neon"] .lower_third .lt-body {
+      background: rgba(8,10,16,0.85);
+      backdrop-filter: blur(6px);
+      border-left: none;
+      border: 1px solid var(--primary);
+      border-radius: calc(6px * var(--scale));
+      box-shadow: 0 0 12px var(--primary), 0 0 28px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    body[data-style="neon"] .message .msg-badge {
+      background: var(--primary);
+      color: #fff;
+      border-radius: 4px;
+      box-shadow: 0 0 10px var(--primary), 0 0 22px color-mix(in srgb, var(--primary) 60%, transparent);
+    }
+    body[data-style="neon"] .message .msg-body {
+      background: rgba(8,10,16,0.85);
+      backdrop-filter: blur(6px);
+      border-top: none;
+      border: 1px solid var(--primary);
+      border-radius: calc(6px * var(--scale));
+      box-shadow: 0 0 12px var(--primary), 0 0 28px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    body[data-style="neon"] .ticker {
+      background: rgba(8,10,16,0.85);
+      border-top: none;
+      border: 1px solid var(--primary);
+      box-shadow: 0 0 10px var(--primary), 0 0 22px color-mix(in srgb, var(--primary) 50%, transparent);
+    }
+    body[data-style="neon"] .ticker .ticker-label {
+      background: var(--primary);
+      box-shadow: 0 0 10px var(--primary);
+    }
+    body[data-style="neon"] .agenda .agenda-body {
+      background: rgba(8,10,16,0.85);
+      backdrop-filter: blur(6px);
+      border-left: none;
+      border: 1px solid var(--primary);
+      border-radius: calc(6px * var(--scale));
+      box-shadow: 0 0 12px var(--primary), 0 0 28px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    body[data-style="neon"] .agenda .agenda-current {
+      box-shadow: inset 0 0 0 1px var(--primary), 0 0 10px color-mix(in srgb, var(--primary) 60%, transparent);
+    }
+    body[data-style="neon"] .score-graphic .score-card,
+    body[data-style="neon"] .score-graphic .score-body,
+    body[data-style="neon"] .timer-graphic {
+      background: rgba(8,10,16,0.85);
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      box-shadow: 0 0 10px var(--primary), 0 0 22px color-mix(in srgb, var(--primary) 50%, transparent);
+    }
+    body[data-style="neon"] .image-graphic img {
+      border-radius: 6px;
+      box-shadow: 0 0 0 1px var(--primary), 0 0 18px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    body[data-style="neon"] .social-comments .sc-card {
+      background: rgba(8,10,16,0.85);
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 60%, transparent);
+    }
+
+    /* Gradient: vibrant primary→secondary gradient fill with soft corners. */
+    body[data-style="gradient"] .lower_third .lt-bar { display: none; }
+    body[data-style="gradient"] .lower_third .lt-body {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      backdrop-filter: none;
+      border-left: none;
+      border-radius: calc(12px * var(--scale));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    body[data-style="gradient"] .message .msg-badge {
+      background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 60%, var(--secondary)));
+      border-radius: 999px;
+    }
+    body[data-style="gradient"] .message .msg-body {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      backdrop-filter: none;
+      border-top: none;
+      border-radius: calc(12px * var(--scale));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    body[data-style="gradient"] .ticker {
+      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+      border-top: none;
+    }
+    body[data-style="gradient"] .ticker .ticker-label {
+      background: rgba(0,0,0,0.25);
+      color: #fff;
+    }
+    body[data-style="gradient"] .agenda .agenda-body {
+      background: linear-gradient(160deg, var(--primary) 0%, var(--secondary) 100%);
+      backdrop-filter: none;
+      border-left: none;
+      border-radius: calc(12px * var(--scale));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    body[data-style="gradient"] .agenda .agenda-item,
+    body[data-style="gradient"] .agenda .agenda-sub { border-radius: 8px; }
+    body[data-style="gradient"] .agenda .agenda-current {
+      background: rgba(255,255,255,0.18);
+      box-shadow: none;
+    }
+    body[data-style="gradient"] .score-graphic .score-card,
+    body[data-style="gradient"] .score-graphic .score-body,
+    body[data-style="gradient"] .timer-graphic {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border-radius: 12px;
+    }
+    body[data-style="gradient"] .image-graphic img { border-radius: 12px; }
+    body[data-style="gradient"] .social-comments .sc-card {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border-radius: 12px;
+    }
+
+    /* Notch: asymmetric clipped corner with an accent stripe — broadcast look. */
+    body[data-style="notch"] .lower_third .lt-bar {
+      height: calc(6px * var(--scale));
+      width: 30%;
+      border-radius: 0;
+      background: var(--primary);
+    }
+    body[data-style="notch"] .lower_third .lt-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-left: none;
+      border-radius: 0;
+      clip-path: polygon(calc(18px * var(--scale)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(18px * var(--scale)));
+    }
+    body[data-style="notch"] .message .msg-badge {
+      border-radius: 0;
+      clip-path: polygon(calc(10px * var(--scale)) 0, 100% 0, calc(100% - calc(10px * var(--scale))) 100%, 0 100%);
+    }
+    body[data-style="notch"] .message .msg-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-top: calc(4px * var(--scale)) solid var(--primary);
+      border-radius: 0;
+      clip-path: polygon(calc(18px * var(--scale)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(18px * var(--scale)));
+    }
+    body[data-style="notch"] .ticker {
+      background: var(--secondary);
+      border-top: calc(4px * var(--scale)) solid var(--primary);
+    }
+    body[data-style="notch"] .ticker .ticker-label {
+      clip-path: polygon(0 0, 100% 0, calc(100% - calc(14px * var(--scale))) 100%, 0 100%);
+    }
+    body[data-style="notch"] .agenda .agenda-body {
+      background: var(--secondary);
+      backdrop-filter: none;
+      border-left: none;
+      border-radius: 0;
+      clip-path: polygon(calc(18px * var(--scale)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(18px * var(--scale)));
+    }
+    body[data-style="notch"] .agenda .agenda-item,
+    body[data-style="notch"] .agenda .agenda-sub { border-radius: 0; }
+    body[data-style="notch"] .agenda .agenda-current { box-shadow: inset calc(4px * var(--scale)) 0 0 var(--primary); }
+    body[data-style="notch"] .score-graphic .score-card,
+    body[data-style="notch"] .score-graphic .score-body,
+    body[data-style="notch"] .timer-graphic { border-radius: 0; }
+    body[data-style="notch"] .image-graphic img { border-radius: 0; }
+    body[data-style="notch"] .social-comments .sc-card {
+      border-radius: 0;
+      clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+    }
+
+    /* ─── Per-style solo agenda (current item morphs into a lower-third) ─── */
+    body[data-style="solid"] .agenda.solo .agenda-current {
+      background: var(--secondary);
+      border-radius: 0;
+      box-shadow: inset calc(8px * var(--scale)) 0 0 var(--primary);
+    }
+    body[data-style="minimal"] .agenda.solo .agenda-current {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #fff;
+      border-radius: 0;
+      box-shadow: inset 0 calc(2px * var(--scale)) 0 var(--primary);
+    }
+    body[data-style="rounded"] .agenda.solo .agenda-current {
+      background: linear-gradient(135deg, var(--secondary), rgba(29,53,87,0.95));
+      border-radius: calc(16px * var(--scale));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 50%, transparent) inset, 0 12px 36px rgba(0,0,0,0.45);
+    }
+    body[data-style="glass"] .agenda.solo .agenda-current {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: calc(14px * var(--scale));
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    body[data-style="neon"] .agenda.solo .agenda-current {
+      background: rgba(8,10,16,0.85);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid var(--primary);
+      border-radius: calc(6px * var(--scale));
+      box-shadow: 0 0 12px var(--primary), 0 0 28px color-mix(in srgb, var(--primary) 55%, transparent);
+    }
+    body[data-style="gradient"] .agenda.solo .agenda-current {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border-radius: calc(12px * var(--scale));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    body[data-style="notch"] .agenda.solo .agenda-current {
+      background: var(--secondary);
+      border-radius: 0;
+      box-shadow: inset 0 calc(4px * var(--scale)) 0 var(--primary);
+      clip-path: polygon(calc(18px * var(--scale)) 0, 100% 0, 100% 100%, 0 100%, 0 calc(18px * var(--scale)));
+    }
+
     /* ─── Custom CSS injection ───────────────────────────────────────────── */
     #customCSS { }
   </style>
@@ -722,6 +1123,7 @@
       document.documentElement.style.setProperty('--text-color', theme.textColor);
       document.documentElement.style.setProperty('--font', theme.fontFamily);
       document.body.style.fontFamily = theme.fontFamily;
+      document.body.setAttribute('data-style', theme.style || 'classic');
       document.getElementById('customCSS').textContent = theme.customCSS || '';
     }
 
@@ -774,12 +1176,13 @@
 
         case 'message':
           el = createElement('div', `message graphic-show`, `
-            <div class="msg-badge">ALERT</div>
+            <div class="msg-badge">${esc(replaceVars(g.content.header != null ? g.content.header : 'ALERT'))}</div>
             <div class="msg-body">
               <div class="msg-text">${esc(replaceVars(g.content.text))}</div>
               <div class="msg-detail">${esc(replaceVars(g.content.detail))}</div>
             </div>
           `);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
 
         case 'ticker':
@@ -950,8 +1353,10 @@
           break;
         }
         case 'message':
+          el.querySelector('.msg-badge').textContent = replaceVars(g.content.header != null ? g.content.header : 'ALERT');
           el.querySelector('.msg-text').textContent = replaceVars(g.content.text);
           el.querySelector('.msg-detail').textContent = replaceVars(g.content.detail);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
         case 'score': {
           const t1 = el.querySelector(`#score-t1-${g.id}`);
