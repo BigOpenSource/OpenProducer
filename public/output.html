@@ -485,11 +485,12 @@
       height: fit-content;
     }
     .image-graphic img {
-      max-width: 800px;
-      max-height: 600px;
+      max-width: calc(640px * var(--scale, 1.25));
+      max-height: calc(480px * var(--scale, 1.25));
       border-radius: 8px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
+    .image-graphic.no-shadow img { box-shadow: none; }
     .image-graphic.graphic-show { animation: fadeIn 0.5s ease forwards; }
     .image-graphic.graphic-hide { animation: fadeOut 0.4s ease forwards; }
 
@@ -1250,11 +1251,14 @@
           break;
         }
 
-        case 'image':
-          el = createElement('div', `image-graphic graphic-show`, `
+        case 'image': {
+          const imShadow = g.content.shadow !== false;
+          el = createElement('div', `image-graphic graphic-show${imShadow ? '' : ' no-shadow'}`, `
             <img src="${esc(replaceVars(g.content.url))}" style="object-fit:${g.content.sizing}" onerror="this.style.display='none'">
           `);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
+        }
 
         case 'image_gallery': {
           const gImgs = g.content.images || [];
@@ -1484,6 +1488,8 @@
             img.src = replaceVars(g.content.url);
             img.style.objectFit = g.content.sizing;
           }
+          el.classList.toggle('no-shadow', g.content.shadow === false);
+          el.style.setProperty('--scale', pctScale(g.content.size));
           break;
         }
         case 'image_gallery': {

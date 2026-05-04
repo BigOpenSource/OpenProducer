@@ -1102,6 +1102,8 @@
 
         case 'image': {
           const lib = g.content.library || [];
+          const imSize = g.content.size != null ? g.content.size : 50;
+          const imShadow = g.content.shadow !== false;
           return `
             <div class="fg"><label>Image</label>
               <div class="row" style="gap:6px">
@@ -1121,7 +1123,16 @@
                       onchange="uc('${id}','sizing',this.value)">
                 <option value="contain" ${g.content.sizing==='contain'?'selected':''}>Contain</option>
                 <option value="cover" ${g.content.sizing==='cover'?'selected':''}>Cover</option>
-              </select></div>`;
+              </select></div>
+            <div class="fg"><label>Size: <span id="im-size-${id}">${imSize}</span>%</label>
+              <input type="range" min="0" max="100" step="1" value="${imSize}" data-gid="${id}" data-field="size"
+                     oninput="document.getElementById('im-size-${id}').textContent=this.value; uc('${id}','size',+this.value)"></div>
+            <div class="fg">
+              <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" ${imShadow ? 'checked' : ''}
+                       onchange="uc('${id}','shadow',this.checked)"> Drop shadow
+              </label>
+            </div>`;
         }
 
         case 'image_gallery': {

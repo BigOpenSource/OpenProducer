@@ -1558,7 +1558,7 @@ function getDefaultContent(type) {
     case 'agenda':
       return { title: 'Agenda', items: ['Welcome', 'Main Topic', '- Key points', '- Discussion', 'Q&A'], size: 50, sizeSolo: 50, currentItem: 0, solo: false, soloShowHeading: false, soloShowItem: true };
     case 'image':
-      return { url: '', sizing: 'contain', library: [] };
+      return { url: '', sizing: 'contain', library: [], size: 50, shadow: true };
     case 'image_gallery':
       return { images: [], current: 0, sizing: 'contain' };
     case 'timer':
