@@ -1050,6 +1050,8 @@
           const aItems = g.content.items || [];
           const aCurrent = g.content.currentItem || 0;
           const aSolo = !!g.content.solo;
+          const aSoloShowHeading = !!g.content.soloShowHeading;
+          const aSoloShowItem = g.content.soloShowItem !== false;
           const aSizeKey = aSolo ? 'sizeSolo' : 'size';
           const aSizeVal = g.content[aSizeKey] != null ? g.content[aSizeKey] : 50;
           let curOpts = `<option value="0" ${aCurrent === 0 ? 'selected' : ''}>None</option>`;
@@ -1076,12 +1078,22 @@
               <div class="fg" style="flex:1"><label>Current Item</label>
                 <select data-gid="${id}" data-field="currentItem"
                         onchange="uc('${id}','currentItem',+this.value)">${curOpts}</select></div>
-              <button class="btn-ghost"
-                      onclick="uc('${id}','solo',${!aSolo})"
-                      style="padding:6px 12px;font-size:12px;${aSolo ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}"
-                      title="${aSolo ? 'Show full list' : 'Show only current item as a lower-third'}">
-                ${aSolo ? '☰ List' : '◉ Solo'}
-              </button>
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch">
+                <label style="font-size:11px;display:flex;gap:5px;align-items:center;color:var(--text-dim);white-space:nowrap;cursor:pointer">
+                  <input type="checkbox" ${aSoloShowHeading ? 'checked' : ''}
+                         onchange="uc('${id}','soloShowHeading',this.checked)"> Heading
+                </label>
+                <label style="font-size:11px;display:flex;gap:5px;align-items:center;color:var(--text-dim);white-space:nowrap;cursor:pointer">
+                  <input type="checkbox" ${aSoloShowItem ? 'checked' : ''}
+                         onchange="uc('${id}','soloShowItem',this.checked)"> Item
+                </label>
+                <button class="btn-ghost"
+                        onclick="uc('${id}','solo',${!aSolo})"
+                        style="padding:6px 12px;font-size:12px;${aSolo ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}"
+                        title="${aSolo ? 'Show full list' : 'Show only current item as a lower-third'}">
+                  ${aSolo ? '☰ List' : '◉ Solo'}
+                </button>
+              </div>
             </div>
             <div class="fg"><label>${aSolo ? 'Solo Size' : 'List Size'}: <span id="agenda-size-${id}">${aSizeVal}</span>%</label>
               <input type="range" min="20" max="100" step="5" value="${aSizeVal}" data-gid="${id}" data-field="${aSizeKey}"

@@ -1556,7 +1556,7 @@ function getDefaultContent(type) {
     case 'ticker':
       return { items: ['Item 1', 'Item 2', 'Item 3'], speed: 60 };
     case 'agenda':
-      return { title: 'Agenda', items: ['Welcome', 'Main Topic', '- Key points', '- Discussion', 'Q&A'], size: 50, sizeSolo: 50, currentItem: 0, solo: false };
+      return { title: 'Agenda', items: ['Welcome', 'Main Topic', '- Key points', '- Discussion', 'Q&A'], size: 50, sizeSolo: 50, currentItem: 0, solo: false, soloShowHeading: false, soloShowItem: true };
     case 'image':
       return { url: '', sizing: 'contain', library: [] };
     case 'image_gallery':

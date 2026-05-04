@@ -441,6 +441,38 @@
       opacity: 0;
       color: transparent;
     }
+    /* Solo with heading visible: keep the title rendered, restyled as a lower-third header bar.
+       Override the default solo title-collapse rules. */
+    .agenda.solo.solo-show-heading .agenda-title {
+      max-height: calc(300px * var(--scale));
+      opacity: 1;
+      padding-top: calc(10px * var(--scale));
+      padding-bottom: calc(10px * var(--scale));
+      margin-top: 0;
+      margin-bottom: 0;
+      border-bottom: none;
+      background: linear-gradient(135deg, var(--primary), rgba(230,57,70,0.92));
+      color: #fff;
+      border-radius: 6px 6px 0 0;
+      padding-left: calc(28px * var(--scale));
+      padding-right: calc(28px * var(--scale));
+      font-size: calc(18px * var(--scale));
+      box-shadow: inset calc(4px * var(--scale)) 0 0 var(--secondary);
+    }
+    /* When both heading and item are shown, square the corners between them */
+    .agenda.solo.solo-show-heading.solo-show-item .agenda-current {
+      border-radius: 0 0 6px 0;
+    }
+    /* Solo with item hidden: collapse the current item too */
+    .agenda.solo:not(.solo-show-item) .agenda-current {
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      overflow: hidden;
+    }
     .agenda.graphic-show { animation: slideInLeft 0.5s ease forwards; }
     .agenda.graphic-hide { animation: slideOutLeft 0.4s ease forwards; }
 
@@ -1206,6 +1238,8 @@
           let cls = 'agenda graphic-show';
           if (cur) cls += ' has-current';
           if (solo) cls += ' solo';
+          if (g.content.soloShowHeading) cls += ' solo-show-heading';
+          if (g.content.soloShowItem !== false) cls += ' solo-show-item';
           el = createElement('div', cls, `
             <div class="agenda-body">
               ${titleHtml}
@@ -1411,6 +1445,8 @@
             el.style.minHeight = el.offsetHeight + 'px';
           }
           el.classList.toggle('solo', isSolo);
+          el.classList.toggle('solo-show-heading', !!g.content.soloShowHeading);
+          el.classList.toggle('solo-show-item', g.content.soloShowItem !== false);
           if (isSolo && !wasSolo) {
             // Force a reflow so the frozen min-height is committed, then release
             // it to the exact body-solo size. In solo the list's gap collapses
